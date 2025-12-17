@@ -1,0 +1,135 @@
+using Bloodcraft.Interfaces;
+using Bloodcraft.Services;
+using Bloodcraft.Systems.Leveling;
+using ProjectM.Network;
+using VampireCommandFramework;
+using static Bloodcraft.Services.PlayerService;
+using static Bloodcraft.Utilities.Misc.PlayerBoolsManager;
+using static Bloodcraft.Utilities.Progression;
+
+namespace Bloodcraft.Commands;
+
+[CommandGroup(name: "level", "lvl")]
+internal static class LevelingCommands
+{
+    [Command(name: "log", adminOnly: false, usage: ".lvl log", description: "切換等級進度記錄開關。")]
+    public static void LogExperienceCommand(ChatCommandContext ctx)
+    {
+        if (!ConfigService.LevelingSystem)
+        {
+            LocalizationService.HandleReply(ctx, "等級系統尚未啟用。");
+            return;
+        }
+
+        var SteamID = ctx.Event.User.PlatformId;
+
+        TogglePlayerBool(SteamID, EXPERIENCE_LOG_KEY);
+        LocalizationService.HandleReply(ctx, $"等級記錄已{(GetPlayerBool(SteamID, EXPERIENCE_LOG_KEY) ? "<color=green>啟用</color>" : "<color=red>關閉</color>")}。");
+    }
+
+    [Command(name: "get", adminOnly: false, usage: ".lvl get", description: "顯示目前等級與進度。")]
+    public static void GetLevelCommand(ChatCommandContext ctx)
+    {
+        if (!ConfigService.LevelingSystem)
+        {
+            LocalizationService.HandleReply(ctx, "等級系統尚未啟用。");
+            return;
+        }
+
+        ulong steamId = ctx.Event.User.PlatformId;
+
+        if (steamId.TryGetPlayerExperience(out var xpData))
+        {
+            int prestigeLevel = steamId.TryGetPlayerPrestiges(out var prestiges) ? prestiges[PrestigeType.Experience] : 0;
+            int level = xpData.Key;
+
+            int progress = (int)(xpData.Value - ConvertLevelToXp(level));
+            int percent = LevelingSystem.GetLevelProgress(steamId);
+
+            LocalizationService.HandleReply(ctx, $"你目前的等級為 [<color=white>{level}</color>][<color=#90EE90>{prestigeLevel}</color>]，擁有 <color=yellow>{progress}</color> 點<color=#FFC0CB>經驗值</color>（<color=white>{percent}%</color>）。");
+
+            if (ConfigService.RestedXPSystem && steamId.TryGetPlayerRestedXP(out var restedData) && restedData.Value > 0)
+            {
+                int roundedXP = (int)(Math.Round(restedData.Value / 100.0) * 100);
+
+                LocalizationService.HandleReply(ctx, $"還有 <color=#FFD700>{roundedXP}</color> 點來自<color=green>休息</color>的額外<color=#FFC0CB>經驗值</color>可獲得~");
+            }
+        }
+        else
+        {
+            LocalizationService.HandleReply(ctx, "你目前還沒有獲得任何經驗值！");
+        }
+    }
+
+    [Command(name: "set", adminOnly: true, usage: ".lvl set [Player] [Level]", description: "設定玩家等級。")]
+    public static void SetLevelCommand(ChatCommandContext ctx, string name, int level)
+    {
+        if (!ConfigService.LevelingSystem)
+        {
+            LocalizationService.HandleReply(ctx, "等級系統尚未啟用。");
+            return;
+        }
+
+        PlayerInfo playerInfo = GetPlayerInfo(name);
+        if (!playerInfo.UserEntity.Exists())
+        {
+            ctx.Reply($"找不到該玩家。");
+            return;
+        }
+
+        User foundUser = playerInfo.User;
+
+        if (level < 0 || level > ConfigService.MaxLevel)
+        {
+            LocalizationService.HandleReply(ctx, $"等級必須介於 <color=white>0</color> 到 <color=white>{ConfigService.MaxLevel}</color> 之間！");
+            return;
+        }
+
+        ulong steamId = foundUser.PlatformId;
+
+        if (steamId.TryGetPlayerExperience(out var xpData))
+        {
+            xpData = new KeyValuePair<int, float>(level, ConvertLevelToXp(level));
+            steamId.SetPlayerExperience(xpData);
+
+            LevelingSystem.SetLevel(playerInfo.CharEntity);
+            LocalizationService.HandleReply(ctx, $"已將 <color=green>{foundUser.CharacterName.Value}</color> 的等級設定為 <color=white>{level}</color>！");
+        }
+        else
+        {
+            LocalizationService.HandleReply(ctx, $"找不到 {foundUser.CharacterName.Value} 的經驗值資料。");
+        }
+    }
+
+    [Command(name: "ignoresharedexperience", shortHand: "ignore", adminOnly: true, usage: ".lvl ignore [Player]", description: "將玩家加入或移除共享經驗忽略名單。")]
+    public static void IgnoreSharedExperiencePlayerCommand(ChatCommandContext ctx, string name)
+    {
+        if (!ConfigService.LevelingSystem)
+        {
+            LocalizationService.HandleReply(ctx, "等級系統尚未啟用。");
+            return;
+        }
+
+        PlayerInfo playerInfo = GetPlayerInfo(name);
+        if (!playerInfo.UserEntity.Exists())
+        {
+            ctx.Reply($"找不到該玩家...");
+            return;
+        }
+
+        if (!DataService.PlayerDictionaries._ignoreSharedExperience.Contains(playerInfo.User.PlatformId))
+        {
+            DataService.PlayerDictionaries._ignoreSharedExperience.Add(playerInfo.User.PlatformId);
+            DataService.PlayerPersistence.SaveIgnoredSharedExperience();
+
+            ctx.Reply($"<color=green>{playerInfo.User.CharacterName.Value}</color> 已加入共享經驗忽略名單！");
+        }
+        else if (DataService.PlayerDictionaries._ignoreSharedExperience.Contains(playerInfo.User.PlatformId))
+        {
+            DataService.PlayerDictionaries._ignoreSharedExperience.Remove(playerInfo.User.PlatformId);
+            DataService.PlayerPersistence.SaveIgnoredSharedExperience();
+
+            ctx.Reply($"<color=green>{playerInfo.User.CharacterName.Value}</color> 已從共享經驗忽略名單移除！");
+        }
+    }
+}
