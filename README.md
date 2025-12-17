@@ -276,10 +276,10 @@ Jairon O.; Odjit; Jera; Kokuren TCG and Gaming Shop; Rexxn; Eduardo G.; DirtyMik
   - Shortcut: *.cw bgs*
 - `.familiar listboxes`
   - 顯示可用的寵物列表。
-  - Shortcut: *.cw boxes*
-- `.familiar movebox [列表名稱]`
-  - 將活動寵物移到指定列表。
-  - Shortcut: *.cw mb [列表名稱]*
+  - Shortcut: *.cw lb*
+- `.familiar movebox [#] [列表名稱]`
+  - 將當前清單中指定編號的寵物移到指定列表。
+  - Shortcut: *.cw mb [#] [列表名稱]*
 - `.familiar overflow`
   - 列出儲存在溢位區的寵物。
   - Shortcut: *.cw of*

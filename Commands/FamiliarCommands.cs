@@ -153,7 +153,7 @@ internal static class FamiliarCommands
         }
     }
 
-    [Command(name: "listboxes", shortHand: "boxes", adminOnly: false, usage: ".cw boxes", description: "顯示可用的寵物列表。")]
+    [Command(name: "listboxes", shortHand: "lb", adminOnly: false, usage: ".cw lb", description: "顯示可用的寵物列表。")]
     public static void ListFamiliarSets(ChatCommandContext ctx)
     {
         if (!ConfigService.FamiliarSystem)
