@@ -392,41 +392,11 @@ internal static class Familiars
 
         return coffin;
     }
-    public static ulong? GetOwnerSteamIdForFamiliar(Entity familiar)
-    {
-        foreach (var kvp in ActiveFamiliars)
-        {
-            ulong steamId = kvp.Key;
-            var list = kvp.Value;
-            if (list != null && list.Any(x => x.Familiar == familiar)) return steamId;
-        }
-
-        return null;
-    }
-
     public static void SyncFamiliarServant(Entity familiar, Entity servant)
     {
         float familiarHealth = familiar.GetMaxHealth();
         int familiarLevel = familiar.GetUnitLevel();
         (float physicalPower, float spellPower) = familiar.GetPowerTuple();
-
-        // Apply rarity multiplier when available
-        float multiplier = 1.0f;
-        ulong? owner = GetOwnerSteamIdForFamiliar(familiar);
-        if (owner.HasValue)
-        {
-            int prefabHash = familiar.GetPrefabGuid().GuidHash;
-            try
-            {
-                var rarity = Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager.GetRarityForPrefab(owner.Value, prefabHash);
-                multiplier = Bloodcraft.Utilities.FamiliarRarityInfo.GetMultiplier(rarity);
-            }
-            catch { multiplier = 1.0f; }
-        }
-
-        familiarHealth *= multiplier;
-        physicalPower *= multiplier;
-        spellPower *= multiplier;
 
         servant.With((ref Health health) =>
         {
@@ -490,11 +460,7 @@ internal static class Familiars
             data.FamiliarUnlocks[activeBox].Add(prefabHash);
             SaveFamiliarUnlocksData(steamId, data);
 
-            var rarity = Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager.AssignRarityForPrefab(steamId, prefabHash);
-            var hex = Bloodcraft.Utilities.FamiliarRarityInfo.GetHex(rarity);
-            var chi = Bloodcraft.Utilities.FamiliarRarityInfo.GetChinese(rarity);
-
-            LocalizationService.HandleReply(ctx, $"<color=green>{new PrefabGUID(prefabHash).GetLocalizedName()}</color> added to <color=white>{activeBox}</color>. Rarity: <color={hex}>{chi} {rarity}</color>");
+            LocalizationService.HandleReply(ctx, $"<color=green>{new PrefabGUID(prefabHash).GetLocalizedName()}</color> added to <color=white>{activeBox}</color>.");
         }
         else if (unit.StartsWith("char", StringComparison.CurrentCultureIgnoreCase)) // search for full and/or partial name match
         {
@@ -525,11 +491,7 @@ internal static class Familiars
                 data.FamiliarUnlocks[activeBox].Add(match.GuidHash);
                 SaveFamiliarUnlocksData(steamId, data);
 
-                var rarity = Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager.AssignRarityForPrefab(steamId, match.GuidHash);
-                var hex = Bloodcraft.Utilities.FamiliarRarityInfo.GetHex(rarity);
-                var chi = Bloodcraft.Utilities.FamiliarRarityInfo.GetChinese(rarity);
-
-                LocalizationService.HandleReply(ctx, $"<color=green>{match.GetLocalizedName()}</color> (<color=yellow>{match.GuidHash}</color>) added to <color=white>{activeBox}</color>. Rarity: <color={hex}>{chi} {rarity}</color>");
+                LocalizationService.HandleReply(ctx, $"<color=green>{match.GetLocalizedName()}</color> (<color=yellow>{match.GuidHash}</color>) added to <color=white>{activeBox}</color>.");
             }
             else
             {

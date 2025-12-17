@@ -330,46 +330,6 @@ internal static class ConfigService
     static readonly Lazy<bool> _familiarSystem = new(() => GetConfigValue<bool>("FamiliarSystem"));
     public static bool FamiliarSystem => _familiarSystem.Value;
 
-    // Familiar rarity system configs
-    static readonly Lazy<bool> _familiarRaritySystem = new(() => GetConfigValue<bool>("FamiliarRaritySystem"));
-    public static bool FamiliarRaritySystem => _familiarRaritySystem.Value;
-
-    static readonly Lazy<float> _familiarRarityProbabilityN = new(() => GetConfigValue<float>("FamiliarRarityProbability_N"));
-    public static float FamiliarRarityProbabilityN => _familiarRarityProbabilityN.Value;
-
-    static readonly Lazy<float> _familiarRarityProbabilityR = new(() => GetConfigValue<float>("FamiliarRarityProbability_R"));
-    public static float FamiliarRarityProbabilityR => _familiarRarityProbabilityR.Value;
-
-    static readonly Lazy<float> _familiarRarityProbabilitySR = new(() => GetConfigValue<float>("FamiliarRarityProbability_SR"));
-    public static float FamiliarRarityProbabilitySR => _familiarRarityProbabilitySR.Value;
-
-    static readonly Lazy<float> _familiarRarityProbabilitySSR = new(() => GetConfigValue<float>("FamiliarRarityProbability_SSR"));
-    public static float FamiliarRarityProbabilitySSR => _familiarRarityProbabilitySSR.Value;
-
-    static readonly Lazy<float> _familiarRarityProbabilitySS = new(() => GetConfigValue<float>("FamiliarRarityProbability_SS"));
-    public static float FamiliarRarityProbabilitySS => _familiarRarityProbabilitySS.Value;
-
-    static readonly Lazy<float> _familiarRarityProbabilitySSS = new(() => GetConfigValue<float>("FamiliarRarityProbability_SSS"));
-    public static float FamiliarRarityProbabilitySSS => _familiarRarityProbabilitySSS.Value;
-
-    static readonly Lazy<float> _familiarRarityMultiplierN = new(() => GetConfigValue<float>("FamiliarRarityMultiplier_N"));
-    public static float FamiliarRarityMultiplierN => _familiarRarityMultiplierN.Value;
-
-    static readonly Lazy<float> _familiarRarityMultiplierR = new(() => GetConfigValue<float>("FamiliarRarityMultiplier_R"));
-    public static float FamiliarRarityMultiplierR => _familiarRarityMultiplierR.Value;
-
-    static readonly Lazy<float> _familiarRarityMultiplierSR = new(() => GetConfigValue<float>("FamiliarRarityMultiplier_SR"));
-    public static float FamiliarRarityMultiplierSR => _familiarRarityMultiplierSR.Value;
-
-    static readonly Lazy<float> _familiarRarityMultiplierSSR = new(() => GetConfigValue<float>("FamiliarRarityMultiplier_SSR"));
-    public static float FamiliarRarityMultiplierSSR => _familiarRarityMultiplierSSR.Value;
-
-    static readonly Lazy<float> _familiarRarityMultiplierSS = new(() => GetConfigValue<float>("FamiliarRarityMultiplier_SS"));
-    public static float FamiliarRarityMultiplierSS => _familiarRarityMultiplierSS.Value;
-
-    static readonly Lazy<float> _familiarRarityMultiplierSSS = new(() => GetConfigValue<float>("FamiliarRarityMultiplier_SSS"));
-    public static float FamiliarRarityMultiplierSSS => _familiarRarityMultiplierSSS.Value;
-
     static readonly Lazy<int> _maxActiveFamiliars = new(() => GetConfigValue<int>("MaxActiveFamiliars"));
     /// <summary>
     /// Maximum number of familiars a player may have active at the same time. Defaults to 1 to preserve existing behaviour.
@@ -716,19 +676,6 @@ internal static class ConfigService
             new ConfigEntryDefinition("Familiars", "DividePlayerExperienceByActiveFamiliars", false, "If true, player's experience from a kill will be divided by the number of summoned familiars when more than DividePlayerExperienceByActiveFamiliarsThreshold are active."),
             new ConfigEntryDefinition("Familiars", "DividePlayerExperienceByActiveFamiliarsThreshold", 2, "The threshold (exclusive) of active familiars above which player's experience will be divided among the active familiars. Default 2 → division applies when activeFamiliars > 2."),
             new ConfigEntryDefinition("Familiars", "UnitUnlockChance", 0.05f, "The chance for a unit unlock as a familiar."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRaritySystem", true, "Enable or disable the familiar rarity system."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityProbability_N", 0.55f, "Probability (fraction) to assign N (普通) rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityProbability_R", 0.25f, "Probability (fraction) to assign R (稀有) rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityProbability_SR", 0.12f, "Probability (fraction) to assign SR (精良) rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityProbability_SSR", 0.06f, "Probability (fraction) to assign SSR (史詩) rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityProbability_SS", 0.018f, "Probability (fraction) to assign SS (傳說) rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityProbability_SSS", 0.002f, "Probability (fraction) to assign SSS (神話) rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityMultiplier_N", 0.3f, "Multiplier to apply to familiar stats for N rarity (e.g., 0.3 == 30%)."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityMultiplier_R", 0.5f, "Multiplier to apply to familiar stats for R rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityMultiplier_SR", 0.8f, "Multiplier to apply to familiar stats for SR rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityMultiplier_SSR", 1.2f, "Multiplier to apply to familiar stats for SSR rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityMultiplier_SS", 3.0f, "Multiplier to apply to familiar stats for SS rarity."),
-            new ConfigEntryDefinition("Familiars", "FamiliarRarityMultiplier_SSS", 10.0f, "Multiplier to apply to familiar stats for SSS rarity."),
             new ConfigEntryDefinition("Familiars", "VBloodUnlockChance", 0.01f, "The chance for a VBlood unlock as a familiar."),
             new ConfigEntryDefinition("Familiars", "PrimalEchoes", false, "Enable or disable acquiring vBloods with configured item reward from exo prestiging (default primal shards) at cost scaling to unit tier using exo reward quantity as the base (highest tier are shard bearers which cost exo reward quantity times 25, or in other words after 25 exo prestiges a player would be able to purchase a shard bearer). Must enable exo prestiging (and therefore normal prestiging), checks for banned vBloods before allowing if applicable."),
             new ConfigEntryDefinition("Familiars", "EchoesFactor", 1, "Increase to multiply costs for vBlood purchases. Valid integers are between 1-4, if values are outside that range they will be clamped."),

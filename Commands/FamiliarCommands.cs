@@ -142,14 +142,7 @@ internal static class FamiliarCommands
                 int prestiges = familiarPrestigeData_V2.FamiliarPrestige.TryGetValue(famKey, out var prestigeData) ? prestigeData : 0;
 
                 string levelAndPrestiges = prestiges > 0 ? $"[<color=white>{level}</color>][<color=#90EE90>{prestiges}</color>]" : $"[<color=white>{level}</color>]";
-
-                var rarity = Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager.GetRarityForPrefab(steamId, famKey);
-                var rhex = Bloodcraft.Utilities.FamiliarRarityInfo.GetHex(rarity);
-                var rchi = Bloodcraft.Utilities.FamiliarRarityInfo.GetChinese(rarity);
-
-                string rarityTag = $" <color={rhex}>[{rchi}]</color>";
-
-                LocalizationService.HandleReply(ctx, $"<color=yellow>{count}</color>| <color=green>{famName}</color>{(familiarBuffsData.FamiliarBuffs.ContainsKey(famKey) ? $"{colorCode}*</color> {levelAndPrestiges}" : $" {levelAndPrestiges}")}{rarityTag}");
+                LocalizationService.HandleReply(ctx, $"<color=yellow>{count}</color>| <color=green>{famName}</color>{(familiarBuffsData.FamiliarBuffs.ContainsKey(famKey) ? $"{colorCode}*</color> {levelAndPrestiges}" : $" {levelAndPrestiges}")}");
                 count++;
             }
         }
@@ -250,8 +243,8 @@ internal static class FamiliarCommands
         }
     }
 
-    [Command(name: "movebox", shortHand: "mb", adminOnly: false, usage: ".cw mb [列表名稱]", description: "將活動寵物移到指定列表。")]
-    public static void MoveFamiliar(ChatCommandContext ctx, string name)
+    [Command(name: "movebox", shortHand: "mb", adminOnly: false, usage: ".cw mb [#] [列表名稱]", description: "將當前清單中指定編號的寵物移到指定列表。")]
+    public static void MoveFamiliar(ChatCommandContext ctx, int choice, string name)
     {
         if (!ConfigService.FamiliarSystem)
         {
@@ -262,38 +255,47 @@ internal static class FamiliarCommands
         ulong steamId = ctx.User.PlatformId;
         FamiliarUnlocksData data = LoadFamiliarUnlocksData(steamId);
 
-        if (data.FamiliarUnlocks.TryGetValue(name, out var familiarSet) && familiarSet.Count < 10)
-        {
-            if (steamId.HasActiveFamiliar())
-            {
-                ActiveFamiliarData activeFamiliar = GetActiveFamiliarData(steamId);
-                int familiarId = activeFamiliar.FamiliarId;
-
-                var keys = data.FamiliarUnlocks.Keys;
-
-                foreach (var key in keys)
-                {
-                    if (data.FamiliarUnlocks[key].Contains(familiarId))
-                    {
-                        data.FamiliarUnlocks[key].Remove(familiarId);
-                        familiarSet.Add(familiarId);
-
-                        SaveFamiliarUnlocksData(steamId, data);
-                    }
-                }
-
-                PrefabGUID PrefabGUID = new(familiarId);
-                LocalizationService.HandleReply(ctx, $"<color=green>{PrefabGUID.GetLocalizedName()}</color> 已移動 - <color=white>{name}</color>");
-            }
-        }
-        else if (data.FamiliarUnlocks.ContainsKey(name))
-        {
-            LocalizationService.HandleReply(ctx, "列表已滿！");
-        }
-        else
+        // 檢查目標列表是否存在
+        if (!data.FamiliarUnlocks.TryGetValue(name, out var targetSet))
         {
             LocalizationService.HandleReply(ctx, "找不到列表！");
+            return;
         }
+
+        // 檢查目標列表是否已滿
+        if (targetSet.Count >= BOX_SIZE)
+        {
+            LocalizationService.HandleReply(ctx, "列表已滿！");
+            return;
+        }
+
+        // 取得當前活動列表
+        if (!steamId.TryGetFamiliarBox(out var activeBox) || !data.FamiliarUnlocks.TryGetValue(activeBox, out var sourceSet))
+        {
+            LocalizationService.HandleReply(ctx, "找不到活動的列表！");
+            return;
+        }
+
+        if (string.Equals(activeBox, name, StringComparison.CurrentCultureIgnoreCase))
+        {
+            LocalizationService.HandleReply(ctx, "目標列表與當前列表相同！");
+            return;
+        }
+
+        if (choice < 1 || choice > sourceSet.Count)
+        {
+            LocalizationService.HandleReply(ctx, $"無效的選擇，請使用 <color=white>1</color> 到 <color=white>{sourceSet.Count}</color> (當前清單:<color=yellow>{activeBox}</color>)");
+            return;
+        }
+
+        int familiarId = sourceSet[choice - 1];
+        sourceSet.RemoveAt(choice - 1);
+        targetSet.Add(familiarId);
+
+        SaveFamiliarUnlocksData(steamId, data);
+
+        PrefabGUID prefab = new(familiarId);
+        LocalizationService.HandleReply(ctx, $"<color=green>{prefab.GetLocalizedName()}</color> 已從 <color=white>{activeBox}</color> 移動到 <color=white>{name}</color>。");
     }
 
     [Command(name: "deletebox", shortHand: "db", adminOnly: false, usage: ".cw db [列表名稱]", description: "如果指定列表為空則刪除它。")]
@@ -482,24 +484,14 @@ internal static class FamiliarCommands
                             unlocksData.FamiliarUnlocks[lastBoxName].Add(vBloodPrefabGuid.GuidHash);
 
                             SaveFamiliarUnlocksData(steamId, unlocksData);
-
-                            var rarity = Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager.AssignRarityForPrefab(steamId, vBloodPrefabGuid.GuidHash);
-                            var hex = Bloodcraft.Utilities.FamiliarRarityInfo.GetHex(rarity);
-                            var chi = Bloodcraft.Utilities.FamiliarRarityInfo.GetChinese(rarity);
-
-                            LocalizationService.HandleReply(ctx, $"抓到新寵物: <color={hex}>{chi} {vBloodPrefabGuid.GetLocalizedName()}</color>");
+                            LocalizationService.HandleReply(ctx, $"抓到新寵物: <color=green>{vBloodPrefabGuid.GetLocalizedName()}</color>");
                         }
                         else if (unlocksData.FamiliarUnlocks.ContainsKey(lastBoxName))
                         {
                             unlocksData.FamiliarUnlocks[lastBoxName].Add(vBloodPrefabGuid.GuidHash);
 
                             SaveFamiliarUnlocksData(steamId, unlocksData);
-
-                            var rarity = Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager.AssignRarityForPrefab(steamId, vBloodPrefabGuid.GuidHash);
-                            var hex = Bloodcraft.Utilities.FamiliarRarityInfo.GetHex(rarity);
-                            var chi = Bloodcraft.Utilities.FamiliarRarityInfo.GetChinese(rarity);
-
-                            LocalizationService.HandleReply(ctx, $"抓到新寵物: <color={hex}>{chi} {vBloodPrefabGuid.GetLocalizedName()}</color>");
+                            LocalizationService.HandleReply(ctx, $"抓到新寵物: <color=green>{vBloodPrefabGuid.GetLocalizedName()}</color>");
                         }
                     }
                 }
@@ -595,14 +587,7 @@ internal static class FamiliarCommands
             int prestiges = familiarPrestigeData_V2.FamiliarPrestige.TryGetValue(familiarKey, out var prestigeData) ? prestigeData : 0;
 
             string levelAndPrestiges = prestiges > 0 ? $"[<color=white>{level}</color>][<color=#90EE90>{prestiges}</color>]" : $"[<color=white>{level}</color>]";
-
-            var rarity = Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager.GetRarityForPrefab(steamId, familiarKey);
-            var rhex = Bloodcraft.Utilities.FamiliarRarityInfo.GetHex(rarity);
-            var rchi = Bloodcraft.Utilities.FamiliarRarityInfo.GetChinese(rarity);
-
-            string rarityTag = $" <color={rhex}>[{rchi}]</color>";
-
-            LocalizationService.HandleReply(ctx, $"<color=yellow>{count}</color>| <color=green>{familiarName}</color>{(familiarBuffsData.FamiliarBuffs.ContainsKey(familiarKey) ? $"{colorCode}*</color> {levelAndPrestiges}" : $" {levelAndPrestiges}")}{rarityTag}");
+            LocalizationService.HandleReply(ctx, $"<color=yellow>{count}</color>| <color=green>{familiarName}</color>{(familiarBuffsData.FamiliarBuffs.ContainsKey(familiarKey) ? $"{colorCode}*</color> {levelAndPrestiges}" : $" {levelAndPrestiges}")}");
             count++;
         }
     }

@@ -1116,6 +1116,7 @@ internal static class DataService
         };
         public static class FamiliarUnlocksManager
         {
+            [Serializable]
             public class FamiliarUnlocksData
             {
                 public Dictionary<string, List<int>> FamiliarUnlocks { get; set; } = [];
@@ -1253,62 +1254,6 @@ internal static class DataService
 
                 string jsonString = File.ReadAllText(filePath);
                 return JsonSerializer.Deserialize<FamiliarBattleGroupsData>(jsonString);
-            }
-
-            // Per-player per-prefab rarity assignments for familiars
-            public static class FamiliarRarityManager
-            {
-                [Serializable]
-                public class FamiliarRarityData
-                {
-                    public Dictionary<int, string> PrefabRarities { get; set; } = new();
-                }
-
-                static string GetFilePath(ulong steamId) => Path.Combine(DirectoryPaths[8], $"{steamId}_familiar_rarity.json");
-
-                public static void SaveFamiliarRarityData(ulong steamId, FamiliarRarityData data)
-                {
-                    string filePath = GetFilePath(steamId);
-                    string jsonString = JsonSerializer.Serialize(data, _jsonOptions);
-
-                    File.WriteAllText(filePath, jsonString);
-                }
-
-                public static FamiliarRarityData LoadFamiliarRarityData(ulong steamId)
-                {
-                    string filePath = GetFilePath(steamId);
-                    if (!File.Exists(filePath))
-                        return new FamiliarRarityData();
-
-                    string jsonString = File.ReadAllText(filePath);
-                    var data = JsonSerializer.Deserialize<FamiliarRarityData>(jsonString) ?? new FamiliarRarityData();
-                    data.PrefabRarities ??= new Dictionary<int, string>();
-                    return data;
-                }
-
-                public static Bloodcraft.Utilities.FamiliarRarity AssignRarityForPrefab(ulong steamId, int prefabHash)
-                {
-                    var data = LoadFamiliarRarityData(steamId);
-                    if (data.PrefabRarities.TryGetValue(prefabHash, out var existing))
-                    {
-                        if (Enum.TryParse<Bloodcraft.Utilities.FamiliarRarity>(existing, out var parsed))
-                            return parsed;
-                    }
-
-                    var rarity = Bloodcraft.Utilities.FamiliarRarityInfo.ChooseRandomRarity();
-                    data.PrefabRarities[prefabHash] = rarity.ToString();
-                    SaveFamiliarRarityData(steamId, data);
-                    return rarity;
-                }
-
-                public static Bloodcraft.Utilities.FamiliarRarity GetRarityForPrefab(ulong steamId, int prefabHash)
-                {
-                    var data = LoadFamiliarRarityData(steamId);
-                    if (data.PrefabRarities.TryGetValue(prefabHash, out var existing) && Enum.TryParse<Bloodcraft.Utilities.FamiliarRarity>(existing, out var parsed))
-                        return parsed;
-
-                    return Bloodcraft.Utilities.FamiliarRarity.N;
-                }
             }
             public static bool AssignFamiliarToGroup(ChatCommandContext ctx, ulong steamId, string groupName, int slotIndex)
             {
@@ -1962,8 +1907,8 @@ internal static class DataService
             }
 
             /*
-    public static FamiliarEquipmentDataV2 LoadFamiliarEquipment(ulong steamId)
-    {
+public static FamiliarEquipmentDataV2 LoadFamiliarEquipment(ulong steamId)
+{
     string path = GetFilePath(steamId);
     FamiliarEquipmentDataV2 dataV2;
     FamiliarEquipmentData data;
@@ -2105,8 +2050,8 @@ internal static class DataService
     SaveFamiliarEquipmentData(steamId, dataV2);
 
     return dataV2;
-    }
-    */
+}
+*/
         }
     }
     public static class FamiliarEquipment
