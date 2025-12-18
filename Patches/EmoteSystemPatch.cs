@@ -58,7 +58,7 @@ internal static class EmoteSystemPatch
         // CallDismiss
         { _waveAbilityGroup, CallDismiss },
         { _saluteAbilityGroup, CombatMode },
-        { _clapAbilityGroup, CallDismiss },
+        { _clapAbilityGroup, BindUnbind },
         { _beckonAbilityGroup, InteractMode },
         { _tauntAbilityGroup, HandleShapeshift }
     };

@@ -174,6 +174,13 @@ internal static class ConfigService
     static readonly Lazy<int> _exoPrestigeRewardQuantity = new(() => GetConfigValue<int>("ExoPrestigeRewardQuantity"));
     public static int ExoPrestigeRewardQuantity => _exoPrestigeRewardQuantity.Value;
 
+    // Auto-remove rewards for non-VBlood familiars (prefab id and quantity)
+    static readonly Lazy<int> _autoRemoveItem = new(() => GetConfigValue<int>("AutoRemoveItem"));
+    public static int AutoRemoveItem => _autoRemoveItem.Value;
+
+    static readonly Lazy<int> _autoRemoveItemQuantity = new(() => GetConfigValue<int>("AutoRemoveItemQuantity"));
+    public static int AutoRemoveItemQuantity => _autoRemoveItemQuantity.Value;
+
     static readonly Lazy<bool> _trueImmortal = new(() => GetConfigValue<bool>("TrueImmortal"));
     public static bool TrueImmortal => _trueImmortal.Value;
 
@@ -677,6 +684,8 @@ internal static class ConfigService
             new ConfigEntryDefinition("Familiars", "DividePlayerExperienceByActiveFamiliarsThreshold", 2, "The threshold (exclusive) of active familiars above which player's experience will be divided among the active familiars. Default 2 → division applies when activeFamiliars > 2."),
             new ConfigEntryDefinition("Familiars", "UnitUnlockChance", 0.05f, "The chance for a unit unlock as a familiar."),
             new ConfigEntryDefinition("Familiars", "VBloodUnlockChance", 0.01f, "The chance for a VBlood unlock as a familiar."),
+            new ConfigEntryDefinition("Familiars", "AutoRemoveItem", -257494203, "Item PrefabGUID to give when a non-VBlood familiar is auto-removed (0 for none)."),
+            new ConfigEntryDefinition("Familiars", "AutoRemoveItemQuantity", 1, "Quantity of item given when auto-removing a non-VBlood familiar."),
             new ConfigEntryDefinition("Familiars", "PrimalEchoes", false, "Enable or disable acquiring vBloods with configured item reward from exo prestiging (default primal shards) at cost scaling to unit tier using exo reward quantity as the base (highest tier are shard bearers which cost exo reward quantity times 25, or in other words after 25 exo prestiges a player would be able to purchase a shard bearer). Must enable exo prestiging (and therefore normal prestiging), checks for banned vBloods before allowing if applicable."),
             new ConfigEntryDefinition("Familiars", "EchoesFactor", 1, "Increase to multiply costs for vBlood purchases. Valid integers are between 1-4, if values are outside that range they will be clamped."),
             // new ConfigEntryDefinition("Familiars", "TraitChance", 0.2f, "The chance for a trait when unlocking familiars. Guaranteed on second unlock of same unit."),

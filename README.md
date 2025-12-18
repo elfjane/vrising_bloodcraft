@@ -226,6 +226,9 @@ Jairon O.; Odjit; Jera; Kokuren TCG and Gaming Shop; Rexxn; Eduardo G.; DirtyMik
   - Shortcut: *.class s [Class]*
 
 ### Familiar Commands
+- `.familiar actives`
+  - 列出目前活動的寵物。
+  - Shortcut: *.cw actives*
 - `.familiar add [玩家名稱] [PrefabGuid/CHAR_單位名稱]` 🔒
   - 單位測試。
   - Shortcut: *.cw a [玩家名稱] [PrefabGuid/CHAR_單位名稱]*
@@ -280,6 +283,9 @@ Jairon O.; Odjit; Jera; Kokuren TCG and Gaming Shop; Rexxn; Eduardo G.; DirtyMik
 - `.familiar movebox [#] [列表名稱]`
   - 將當前清單中指定編號的寵物移到指定列表。
   - Shortcut: *.cw mb [#] [列表名稱]*
+- `.familiar movetop [#]`
+  - 將當前清單指定編號的寵物移到第一位，其它往後移動。
+  - Shortcut: *.cw top [#]*
 - `.familiar overflow`
   - 列出儲存在溢位區的寵物。
   - Shortcut: *.cw of*
@@ -289,9 +295,15 @@ Jairon O.; Odjit; Jera; Kokuren TCG and Gaming Shop; Rexxn; Eduardo G.; DirtyMik
 - `.familiar prestige`
   - 如果條件滿足，將寵物進行聲望晉升，按配置的倍率提升基礎屬性。
   - Shortcut: *.cw pr*
+- `.familiar recallall`
+  - 重新呼叫所有活動寵物。
+  - Shortcut: *.cw recallall*
 - `.familiar remove [#]`
   - 從當前集合中永久移除寵物。
   - Shortcut: *.cw r [#]*
+- `.familiar removepet [#]`
+  - 永久刪除寵物並獲得設定道具（非VBlood）。
+  - Shortcut: *.cw rm [#]*
 - `.familiar renamebox [目前名稱] [新名稱]`
   - 重新命名一個列表。
   - Shortcut: *.cw rb [目前名稱] [新名稱]*
@@ -738,6 +750,10 @@ Jairon O.; Odjit; Jera; Kokuren TCG and Gaming Shop; Rexxn; Eduardo G.; DirtyMik
   The chance for a unit unlock as a familiar.
 - **V Blood Unlock Chance**: `VBloodUnlockChance` (float, default: 0.01)
   The chance for a VBlood unlock as a familiar.
+- **Auto Remove Item**: `AutoRemoveItem` (int, default: -257494203)
+  Item PrefabGUID to give when a non-VBlood familiar is auto-removed (0 for none).
+- **Auto Remove Item Quantity**: `AutoRemoveItemQuantity` (int, default: 1)
+  Quantity of item given when auto-removing a non-VBlood familiar.
 - **Primal Echoes**: `PrimalEchoes` (bool, default: False)
   Enable or disable acquiring vBloods with configured item reward from exo prestiging (default primal shards) at cost scaling to unit tier using exo reward quantity as the base (highest tier are shard bearers which cost exo reward quantity times 25, or in other words after 25 exo prestiges a player would be able to purchase a shard bearer). Must enable exo prestiging (and therefore normal prestiging), checks for banned vBloods before allowing if applicable.
 - **Echoes Factor**: `EchoesFactor` (int, default: 1)

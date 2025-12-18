@@ -298,6 +298,47 @@ internal static class FamiliarCommands
         LocalizationService.HandleReply(ctx, $"<color=green>{prefab.GetLocalizedName()}</color> 已從 <color=white>{activeBox}</color> 移動到 <color=white>{name}</color>。");
     }
 
+    [Command(name: "movetop", shortHand: "top", adminOnly: false, usage: ".cw top [#]", description: "將當前清單指定編號的寵物移到第一位，其它往後移動。")]
+    public static void MoveFamiliarToTop(ChatCommandContext ctx, int choice)
+    {
+        if (!ConfigService.FamiliarSystem)
+        {
+            LocalizationService.HandleReply(ctx, "寵物系統未啟用。");
+            return;
+        }
+
+        ulong steamId = ctx.User.PlatformId;
+        FamiliarUnlocksData data = LoadFamiliarUnlocksData(steamId);
+
+        // 取得當前活動列表
+        if (!steamId.TryGetFamiliarBox(out var activeBox) || !data.FamiliarUnlocks.TryGetValue(activeBox, out var sourceSet))
+        {
+            LocalizationService.HandleReply(ctx, "找不到活動的列表！");
+            return;
+        }
+
+        if (choice < 1 || choice > sourceSet.Count)
+        {
+            LocalizationService.HandleReply(ctx, $"無效的選擇，請使用 <color=white>1</color> 到 <color=white>{sourceSet.Count}</color> (當前清單:<color=yellow>{activeBox}</color>)");
+            return;
+        }
+
+        if (choice == 1)
+        {
+            LocalizationService.HandleReply(ctx, "該寵物已經位於第一位！");
+            return;
+        }
+
+        int familiarId = sourceSet[choice - 1];
+        sourceSet.RemoveAt(choice - 1);
+        sourceSet.Insert(0, familiarId);
+
+        SaveFamiliarUnlocksData(steamId, data);
+
+        PrefabGUID movedPrefab = new(familiarId);
+        LocalizationService.HandleReply(ctx, $"<color=green>{movedPrefab.GetLocalizedName()}</color> 已從 <color=white>{activeBox}</color> 移到第一位。");
+    }
+
     [Command(name: "deletebox", shortHand: "db", adminOnly: false, usage: ".cw db [列表名稱]", description: "如果指定列表為空則刪除它。")]
     public static void DeleteBoxCommand(ChatCommandContext ctx, string name)
     {
@@ -535,6 +576,82 @@ internal static class FamiliarCommands
             SaveFamiliarUnlocksData(steamId, data);
 
             LocalizationService.HandleReply(ctx, $"<color=green>{familiarId.GetLocalizedName()}</color> 已從 <color=white>{activeBox}</color> 移動到溢位區。");
+        }
+        else
+        {
+            LocalizationService.HandleReply(ctx, "找不到要移除的活動寵物列表...");
+        }
+    }
+
+    [Command(name: "removepet", shortHand: "rm", adminOnly: false, usage: ".cw rm [#]", description: "永久刪除寵物並獲得設定道具（非VBlood）。")]
+    public static void RemoveFamiliarPermanentlyCommand(ChatCommandContext ctx, int choice)
+    {
+        if (!ConfigService.FamiliarSystem)
+        {
+            LocalizationService.HandleReply(ctx, "寵物系統未啟用。");
+            return;
+        }
+
+        ulong steamId = ctx.User.PlatformId;
+        FamiliarUnlocksData data = LoadFamiliarUnlocksData(steamId);
+
+        if (steamId.TryGetFamiliarBox(out var activeBox) && data.FamiliarUnlocks.TryGetValue(activeBox, out var familiarSet))
+        {
+            if (choice < 1 || choice > familiarSet.Count)
+            {
+                LocalizationService.HandleReply(ctx, $"無效的選擇，請使用 <color=white>1</color> 到 <color=white>{familiarSet.Count}</color> (當前清單:<color=yellow>{activeBox}</color>)");
+                return;
+            }
+
+            int famKey = familiarSet[choice - 1];
+            PrefabGUID familiarId = new(famKey);
+
+            // Determine if this is a VBlood (boss) prefab - only non-VBlood get the auto-remove reward
+            bool isVBlood = false;
+            if (PrefabCollectionSystem._PrefabGuidToEntityMap.TryGetValue(familiarId, out Entity prefabEntity))
+            {
+                isVBlood = prefabEntity.Has<VBloodConsumeSource>() || prefabEntity.Has<VBloodUnit>();
+            }
+
+            // Give configured auto-remove reward if applicable
+            PrefabGUID rewardItem = new(ConfigService.AutoRemoveItem);
+            int qty = ConfigService.AutoRemoveItemQuantity;
+
+            if (!isVBlood && !(rewardItem.Equals(new PrefabGUID(0)) || qty <= 0))
+            {
+                Misc.GiveOrDropItem(ctx.Event.User, ctx.Event.SenderCharacterEntity, rewardItem, qty);
+                LocalizationService.HandleReply(ctx, $"<color=green>{familiarId.GetLocalizedName()}</color> 已被永久刪除，並獲得了 <color=white>{rewardItem.GetLocalizedName()}</color>x<color=white>{qty}</color>。");
+            }
+            else
+            {
+                LocalizationService.HandleReply(ctx, $"<color=green>{familiarId.GetLocalizedName()}</color> 已被永久刪除。");
+            }
+
+            // Remove from unlocks and clean up saved data
+            familiarSet.RemoveAt(choice - 1);
+
+            var xpData = LoadFamiliarExperienceData(steamId);
+            if (xpData.FamiliarExperience.ContainsKey(famKey))
+            {
+                xpData.FamiliarExperience.Remove(famKey);
+                SaveFamiliarExperienceData(steamId, xpData);
+            }
+
+            var prestigeData = LoadFamiliarPrestigeData(steamId);
+            if (prestigeData.FamiliarPrestige.ContainsKey(famKey))
+            {
+                prestigeData.FamiliarPrestige.Remove(famKey);
+                SaveFamiliarPrestigeData(steamId, prestigeData);
+            }
+
+            var buffsData = LoadFamiliarBuffsData(steamId);
+            if (buffsData.FamiliarBuffs.ContainsKey(famKey))
+            {
+                buffsData.FamiliarBuffs.Remove(famKey);
+                SaveFamiliarBuffsData(steamId, buffsData);
+            }
+
+            SaveFamiliarUnlocksData(steamId, data);
         }
         else
         {
@@ -965,71 +1082,46 @@ internal static class FamiliarCommands
 
         if (steamId.HasActiveFamiliar())
         {
-            ActiveFamiliarData activeFamiliar = GetActiveFamiliarData(steamId);
-            int familiarId = activeFamiliar.FamiliarId;
-
             FamiliarExperienceData xpData = LoadFamiliarExperienceData(ctx.Event.User.PlatformId);
+            FamiliarPrestigeData prestigeData = LoadFamiliarPrestigeData(steamId);
             int clampedCost = Mathf.Clamp(ConfigService.PrestigeCostItemQuantity, SCHEMATICS_MIN, SCHEMATICS_MAX);
 
+            var actives = ActiveFamiliarManager.GetActiveFamiliars(steamId)?.Where(x => x.Familiar.Exists()).ToList();
+            if (actives == null || actives.Count == 0)
+            {
+                LocalizationService.HandleReply(ctx, "找不到要進行聲望晉升的活動寵物！");
+                return;
+            }
+
+            // If player has enough schematics, use the inventory path which consumes schematics per familiar
             if (InventoryUtilities.TryGetInventoryEntity(EntityManager, playerCharacter, out Entity inventory) && ServerGameManager.GetInventoryItemCount(inventory, _itemSchematic) >= clampedCost)
             {
                 HandleFamiliarPrestige(ctx, clampedCost);
+                return;
             }
-            else if (xpData.FamiliarExperience[familiarId].Key >= ConfigService.MaxFamiliarLevel)
+
+            // Otherwise try to prestige any active familiars that are at max level (no schematics consumed)
+            bool anyPrestiged = false;
+
+            foreach (var data in actives)
             {
-                FamiliarPrestigeData prestigeData = LoadFamiliarPrestigeData(steamId);
+                int familiarId = data.FamiliarId;
+
+                if (!xpData.FamiliarExperience.ContainsKey(familiarId)) continue;
+                if (xpData.FamiliarExperience[familiarId].Key < ConfigService.MaxFamiliarLevel) continue;
 
                 if (!prestigeData.FamiliarPrestige.ContainsKey(familiarId))
                 {
                     prestigeData.FamiliarPrestige[familiarId] = 0;
                     SaveFamiliarPrestigeData(steamId, prestigeData);
+                    prestigeData = LoadFamiliarPrestigeData(steamId);
                 }
-
-                prestigeData = LoadFamiliarPrestigeData(steamId);
 
                 if (prestigeData.FamiliarPrestige[familiarId] >= ConfigService.MaxFamiliarPrestiges)
                 {
                     LocalizationService.HandleReply(ctx, "寵物已達到最大聲望次數！");
-                    return;
+                    continue;
                 }
-
-                /*
-                if (stats.Count < FamiliarPrestigeStats.Count) // if less than max stats, parse entry and add if set doesnt already contain
-                {
-                    if (int.TryParse(statType, out value))
-                    {
-                        int length = FamiliarPrestigeStats.Count;
-
-                        if (value < 1 || value > length)
-                        {
-                            LocalizationService.HandleReply(ctx, $"無效的寵物聲望屬性類型，使用 '<color=white>.fam lst</color>' 查看選項。");
-                            return;
-                        }
-
-                        --value;
-
-                        if (!stats.Contains(value))
-                        {
-                            stats.Add(value);
-                        }
-                        else
-                        {
-                            LocalizationService.HandleReply(ctx, $"寵物已經透過聲望獲得了 <color=#00FFFF>{FamiliarPrestigeStats[value]}</color> (<color=yellow>{value + 1}</color>)，使用 '<color=white>.fam lst</color>' 查看選項。");
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        LocalizationService.HandleReply(ctx, $"無效的寵物聲望屬性，使用 '<color=white>.fam lst</color>' 查看選項。");
-                        return;
-                    }
-                }
-                else if (stats.Count >= FamiliarPrestigeStats.Count && !string.IsNullOrEmpty(statType))
-                {
-                    LocalizationService.HandleReply(ctx, "寵物已經擁有所有聲望屬性！ ('<color=white>.fam pr</color>' 而不是 '<color=white>.fam pr [聲望屬性]</color>')");
-                    return;
-                }
-                */
 
                 KeyValuePair<int, float> newXP = new(1, ConvertLevelToXp(1)); // 重置等級為 1
                 xpData.FamiliarExperience[familiarId] = newXP;
@@ -1039,23 +1131,14 @@ internal static class FamiliarCommands
                 prestigeData.FamiliarPrestige[familiarId] = prestigeLevel;
                 SaveFamiliarPrestigeData(steamId, prestigeData);
 
-                Entity familiar = GetActiveFamiliar(playerCharacter);
+                Entity familiar = data.Familiar;
                 ModifyUnitStats(familiar, newXP.Key, steamId, familiarId);
 
                 LocalizationService.HandleReply(ctx, $"你的寵物已進行聲望晉升 [<color=#90EE90>{prestigeLevel}</color>]！");
-
-                /*
-                if (value == -1)
-                {
-                    LocalizationService.HandleReply(ctx, $"你的寵物已進行聲望晉升 [<color=#90EE90>{prestigeLevel}</color>]，現在等級為 <color=white>{newXP.Key}</color>！");
-                }
-                else
-                {
-                    LocalizationService.HandleReply(ctx, $"你的寵物已進行聲望晉升 [<color=#90EE90>{prestigeLevel}</color>]，現在等級為 <color=white>{newXP.Key}</color>！ (+<color=#00FFFF>{FamiliarPrestigeStats[value]}</color>)");
-                }
-                */
+                anyPrestiged = true;
             }
-            else
+
+            if (!anyPrestiged)
             {
                 LocalizationService.HandleReply(ctx, $"嘗試進行聲望晉升的寵物必須達到最高等級 (<color=white>{ConfigService.MaxFamiliarLevel}</color>) 或需要 <color=#ffd9eb>{_itemSchematic.GetLocalizedName()}</color><color=yellow>x</color><color=white>{clampedCost}</color>。");
             }
@@ -1064,6 +1147,50 @@ internal static class FamiliarCommands
         {
             LocalizationService.HandleReply(ctx, "找不到要進行聲望晉升的活動寵物！");
         }
+    }
+
+    [Command(name: "recallall", shortHand: "recall", adminOnly: false, usage: ".cw recallall", description: "重新呼叫所有活動寵物。")]
+    public static void RecallAllFamiliarsCommand(ChatCommandContext ctx)
+    {
+        if (!ConfigService.FamiliarSystem)
+        {
+            LocalizationService.HandleReply(ctx, "寵物系統未啟用。");
+            return;
+        }
+
+        Entity playerCharacter = ctx.Event.SenderCharacterEntity;
+        User user = ctx.Event.User;
+
+        int recalled = Utilities.Familiars.RecallActiveFamiliars(playerCharacter, user);
+        if (recalled == 0) LocalizationService.HandleReply(ctx, "沒有要重新呼叫的活動寵物。");
+        else LocalizationService.HandleReply(ctx, $"已重新呼叫 <color=green>{recalled}</color> 隻活動寵物。");
+    }
+
+    [Command(name: "actives", shortHand: "actv", adminOnly: false, usage: ".cw actives", description: "列出目前活動的寵物。")]
+    public static void ListActiveFamiliarsCommand(ChatCommandContext ctx)
+    {
+        if (!ConfigService.FamiliarSystem)
+        {
+            LocalizationService.HandleReply(ctx, "寵物系統未啟用。");
+            return;
+        }
+
+        User user = ctx.Event.User;
+        ulong steamId = user.PlatformId;
+        var actives = Utilities.Familiars.ActiveFamiliarManager.GetActiveFamiliars(steamId) ?? new List<Familiars.ActiveFamiliarData>();
+        var existing = actives.Where(x => x.Familiar.Exists()).ToList();
+        if (!existing.Any()) { LocalizationService.HandleReply(ctx, "你目前沒有活動寵物。"); return; }
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine($"你目前有 <color=green>{existing.Count}</color> 隻活動寵物：");
+        int idx = 1;
+        foreach (var d in existing)
+        {
+            string name = d.Familiar.Exists() ? d.Familiar.GetPrefabGuid().GetLocalizedName() : "<unknown>";
+            sb.AppendLine($"{idx++}: {name} (ID: {d.FamiliarId}){(d.Dismissed ? " [dismissed]" : "")}");
+        }
+
+        LocalizationService.HandleReply(ctx, sb.ToString());
     }
 
     [Command(name: "reset", adminOnly: false, usage: ".cw reset", description: "重置（摧毀）在追隨者緩衝區中找到的實體並清除寵物活動數據。")]

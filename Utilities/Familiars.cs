@@ -359,19 +359,55 @@ internal static class Familiars
     }
     public static Entity GetActiveFamiliar(Entity playerCharacter)
     {
-        // ActiveFamiliarData activeFamiliarData;
-        // if (!steamId.Equals(default)) activeFamiliarData = GetActiveFamiliarData(steamId);
-        // else activeFamiliarData = GetActiveFamiliarData(playerCharacter.GetSteamId());
-        ActiveFamiliarData activeFamiliarData = GetActiveFamiliarData(playerCharacter.GetSteamId());
-        return activeFamiliarData.Familiar;
+        if (!playerCharacter.Exists()) return Entity.Null;
+
+        ulong steamId = playerCharacter.GetSteamId();
+
+        // Prefer any active familiar stored in ActiveFamiliarManager that exists and is not dismissed
+        var actives = ActiveFamiliarManager.GetActiveFamiliars(steamId);
+        if (actives != null && actives.Count > 0)
+        {
+            var preferred = actives.FirstOrDefault(x => x.Familiar.Exists() && !x.Dismissed);
+            if (preferred != null && preferred.Familiar.Exists()) return preferred.Familiar;
+
+            var firstExisting = actives.FirstOrDefault(x => x.Familiar.Exists());
+            if (firstExisting != null && firstExisting.Familiar.Exists()) return firstExisting.Familiar;
+        }
+
+        // Fall back to checking the follower buffer on the character (legacy behavior)
+        Entity found = FindActiveFamiliar(playerCharacter);
+        if (found.Exists()) return found;
+
+        // Ensure we return something consistent with the ActiveFamiliarData API
+        return GetActiveFamiliarData(steamId).Familiar;
     }
+
     public static Entity GetFamiliarServant(Entity playerCharacter)
     {
-        // ActiveFamiliarData activeFamiliarData;
-        // if (!steamId.Equals(default)) activeFamiliarData = GetActiveFamiliarData(steamId);
-        // else activeFamiliarData = GetActiveFamiliarData(playerCharacter.GetSteamId());
-        ActiveFamiliarData activeFamiliarData = GetActiveFamiliarData(playerCharacter.GetSteamId());
-        return activeFamiliarData.Servant;
+        if (!playerCharacter.Exists()) return Entity.Null;
+
+        ulong steamId = playerCharacter.GetSteamId();
+
+        // Try to pick the servant associated with the preferred active familiar
+        var actives = ActiveFamiliarManager.GetActiveFamiliars(steamId);
+        if (actives != null && actives.Count > 0)
+        {
+            var preferred = actives.FirstOrDefault(x => x.Familiar.Exists() && !x.Dismissed);
+            if (preferred != null && preferred.Servant.Exists()) return preferred.Servant;
+
+            var firstExistingServant = actives.FirstOrDefault(x => x.Servant.Exists());
+            if (firstExistingServant != null && firstExistingServant.Servant.Exists()) return firstExistingServant.Servant;
+        }
+
+        // Fallback: derive servant from what FindActiveFamiliar returns
+        Entity fam = GetActiveFamiliar(playerCharacter);
+        if (fam.Exists())
+        {
+            Entity servant = FindFamiliarServant(fam);
+            if (servant.Exists()) return servant;
+        }
+
+        return Entity.Null;
     }
     public static Entity GetServantFamiliar(Entity servant)
     {
@@ -649,6 +685,32 @@ internal static class Familiars
         string message = "<color=yellow>Familiar</color> <color=red>disabled</color>!";
         LocalizationService.HandleServerReply(EntityManager, user, message);
     }
+
+    /// <summary>
+    /// Recall all currently active familiars for the player (calls each familiar and clears dismissed state).
+    /// Returns the number of familiars recalled.
+    /// </summary>
+    public static int RecallActiveFamiliars(Entity playerCharacter, User user)
+    {
+        if (!playerCharacter.Exists()) return 0;
+
+        ulong steamId = user.PlatformId;
+        var actives = ActiveFamiliarManager.GetActiveFamiliars(steamId)?.Where(x => x.Familiar.Exists()).ToList();
+        if (actives == null || actives.Count == 0) return 0;
+
+        int recalled = 0;
+        foreach (var data in actives)
+        {
+            var fam = data.Familiar;
+            if (!fam.Exists()) continue;
+
+            CallFamiliar(playerCharacter, fam, user, steamId);
+            ActiveFamiliarManager.UpdateActiveFamiliarDismissed(steamId, fam, false);
+            recalled++;
+        }
+
+        return recalled;
+    }
     public static string GetShinyInfo(FamiliarBuffsData buffsData, Entity familiar, int familiarId)
     {
         if (buffsData.FamiliarBuffs.ContainsKey(familiarId))
@@ -758,8 +820,14 @@ internal static class Familiars
                 var allActives = ActiveFamiliarManager.GetActiveFamiliars(steamId);
                 if (allActives != null && allActives.Any(x => x.FamiliarId == famKey))
                 {
-                    LocalizationService.HandleServerReply(EntityManager, user, "You already have that familiar type summoned!");
-                    return;
+                    var existing = allActives.FirstOrDefault(x => x.FamiliarId == famKey);
+                    if (existing != null && existing.Familiar.Exists())
+                    {
+                        CallFamiliar(playerCharacter, existing.Familiar, user, steamId);
+                        LocalizationService.HandleServerReply(EntityManager, user, "Familiar recalled!");
+                        return;
+                    }
+                    // If there's a matching entry but no entity present (stale), allow binding to proceed
                 }
 
                 ActiveFamiliarManager.UpdateActiveFamiliarBinding(steamId, true);
@@ -779,8 +847,14 @@ internal static class Familiars
                 var allActives = ActiveFamiliarManager.GetActiveFamiliars(steamId);
                 if (allActives != null && allActives.Any(x => x.FamiliarId == famKey))
                 {
-                    LocalizationService.HandleServerReply(EntityManager, user, "You already have that familiar type summoned!");
-                    return;
+                    var existing = allActives.FirstOrDefault(x => x.FamiliarId == famKey);
+                    if (existing != null && existing.Familiar.Exists())
+                    {
+                        CallFamiliar(playerCharacter, existing.Familiar, user, steamId);
+                        LocalizationService.HandleServerReply(EntityManager, user, "Familiar recalled!");
+                        return;
+                    }
+                    // If there's a matching entry but no entity present (stale), allow binding to proceed
                 }
 
                 steamId.SetBindingIndex(boxIndex);
@@ -1041,104 +1115,67 @@ internal static class Familiars
 
         return $"<color=green>{new PrefabGUID(familiarId).GetLocalizedName()}</color>";
     }
-    public static void HandleFamiliarPrestige(ChatCommandContext ctx, int clampedCost) // need to replace first block in command with this method but laterrrr
+    public static void HandleFamiliarPrestige(ChatCommandContext ctx, int clampedCost) // now supports prestige for multiple active familiars (consumes schematics per familiar)
     {
         Entity playerCharacter = ctx.Event.SenderCharacterEntity;
         User user = ctx.User;
 
         ulong steamId = user.PlatformId;
 
-        if (!steamId.HasActiveFamiliar())
+        var actives = ActiveFamiliarManager.GetActiveFamiliars(steamId)?.Where(x => x.Familiar.Exists()).ToList();
+        if (actives == null || actives.Count == 0)
         {
-            LocalizationService.HandleReply(ctx, "Couldn't find active familiar!");
+            LocalizationService.HandleReply(ctx, "找不到活動的寵物...");
             return;
         }
-
-        ActiveFamiliarData activeFamiliar = GetActiveFamiliarData(steamId);
-        int familiarId = activeFamiliar.FamiliarId;
 
         FamiliarExperienceData xpData = LoadFamiliarExperienceData(steamId);
         FamiliarPrestigeData prestigeData = LoadFamiliarPrestigeData(steamId);
 
-        if (!prestigeData.FamiliarPrestige.ContainsKey(familiarId))
+        bool anyPrestiged = false;
+
+        foreach (var data in actives)
         {
-            prestigeData.FamiliarPrestige[familiarId] = 0;
-            SaveFamiliarPrestigeData(steamId, prestigeData);
-        }
+            int familiarId = data.FamiliarId;
 
-        prestigeData = LoadFamiliarPrestigeData(steamId);
-
-        if (prestigeData.FamiliarPrestige[familiarId] >= ConfigService.MaxFamiliarPrestiges)
-        {
-            LocalizationService.HandleReply(ctx, $"Your familiar has already prestiged the maximum number of times! (<color=white>{ConfigService.MaxFamiliarPrestiges}</color>)");
-            return;
-        }
-
-        /*
-        int value = -1;
-
-        if (stats.Count < FamiliarPrestigeStats.Count) // if less than max stats parse entry and add if set doesnt already contain
-        {
-            if (int.TryParse(statType, out value))
+            if (!prestigeData.FamiliarPrestige.ContainsKey(familiarId))
             {
-                int length = FamiliarPrestigeStats.Count;
-
-                if (value < 1 || value > length)
-                {
-                    LocalizationService.HandleReply(ctx, $"Invalid familiar prestige stat type, use '<color=white>.fam lst</color>' to see options.");
-                    return;
-                }
-
-                --value;
-
-                if (!stats.Contains(value))
-                {
-                    stats.Add(value);
-                }
-                else
-                {
-                    LocalizationService.HandleReply(ctx, $"Familiar already has <color=#00FFFF>{FamiliarPrestigeStats[value]}</color> (<color=yellow>{value + 1}</color>) from prestiging, use '<color=white>.fam lst</color>' to see options.");
-                    return;
-                }
+                prestigeData.FamiliarPrestige[familiarId] = 0;
+                SaveFamiliarPrestigeData(steamId, prestigeData);
+                prestigeData = LoadFamiliarPrestigeData(steamId);
             }
-            else
+
+            if (prestigeData.FamiliarPrestige[familiarId] >= ConfigService.MaxFamiliarPrestiges)
             {
-                LocalizationService.HandleReply(ctx, $"Invalid familiar prestige stat, use '<color=white>.fam lst</color>' to see options.");
-                return;
+                LocalizationService.HandleReply(ctx, $"{GetFamiliarName(familiarId, LoadFamiliarBuffsData(steamId))} 已達到最大聲望次數！ (<color=white>{ConfigService.MaxFamiliarPrestiges}</color>)");
+                continue;
             }
-        }
-        else if (stats.Count >= FamiliarPrestigeStats.Count && !string.IsNullOrEmpty(statType))
-        {
-            LocalizationService.HandleReply(ctx, "Familiar already has all prestige stats! ('<color=white>.fam pr</color>' instead of '<color=white>.fam pr [PrestigeStat]</color>')");
-            return;
-        }
-        */
 
-        if (ServerGameManager.TryRemoveInventoryItem(playerCharacter, _itemSchematic, clampedCost))
-        {
+            // Attempt to remove schematics for this familiar's prestige; if removal fails, stop processing further familiars
+            if (!ServerGameManager.TryRemoveInventoryItem(playerCharacter, _itemSchematic, clampedCost))
+            {
+                LocalizationService.HandleReply(ctx, "無法從你的背包中移除所需的圖紙（或資源不足）！");
+                break;
+            }
+
             int prestigeLevel = prestigeData.FamiliarPrestige[familiarId] + 1;
             prestigeData.FamiliarPrestige[familiarId] = prestigeLevel;
             SaveFamiliarPrestigeData(steamId, prestigeData);
 
-            Entity familiar = GetActiveFamiliar(playerCharacter);
-            ModifyUnitStats(familiar, xpData.FamiliarExperience[familiarId].Key, steamId, familiarId);
-
-            LocalizationService.HandleReply(ctx, $"Your familiar has prestiged [<color=#90EE90>{prestigeLevel}</color>]; the accumulated knowledge allowed them to retain their level!");
-
-            /*
-            if (value == -1)
+            if (xpData.FamiliarExperience.ContainsKey(familiarId))
             {
-                LocalizationService.HandleReply(ctx, $"Your familiar has prestiged [<color=#90EE90>{prestigeLevel}</color>]; the accumulated knowledge allowed them to retain their level!");
+                Entity familiar = data.Familiar;
+                ModifyUnitStats(familiar, xpData.FamiliarExperience[familiarId].Key, steamId, familiarId);
             }
-            else
-            {
-                LocalizationService.HandleReply(ctx, $"Your familiar has prestiged [<color=#90EE90>{prestigeLevel}</color>]; the accumulated knowledge allowed them to retain their level! (+<color=#00FFFF>{FamiliarPrestigeStats[value]}</color>)");
-            }
-            */
+
+            LocalizationService.HandleReply(ctx, $"{GetFamiliarName(familiarId, LoadFamiliarBuffsData(steamId))} 已進行聲望晉升 [<color=#90EE90>{prestigeLevel}</color>]！");
+            anyPrestiged = true;
         }
-        else
+
+        if (!anyPrestiged)
         {
-            LocalizationService.HandleReply(ctx, "Failed to remove schematics from your inventory!");
+            // If nothing was prestiged, give a helpful message
+            LocalizationService.HandleReply(ctx, "沒有寵物可以進行聲望晉升（可能是資源不足或已達到最大聲望），請確認條件或攜帶足夠的圖紙。");
         }
     }
     public static IEnumerator HandleFamiliarShapeshiftRoutine(User user, Entity playerCharacter, Entity familiar)

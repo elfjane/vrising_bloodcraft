@@ -13,6 +13,7 @@ using static Bloodcraft.Systems.Expertise.WeaponManager;
 using static Bloodcraft.Utilities.Misc.PlayerBoolsManager;
 
 namespace Bloodcraft.Utilities;
+
 internal static class Misc
 {
     static EntityManager EntityManager => Core.EntityManager;
@@ -74,7 +75,7 @@ internal static class Misc
 
     static readonly Dictionary<PrefabGUID, PrefabGUID> _infusionShinyBuffs = new()
     {
-        { PrefabGUIDs.SpellMod_Weapon_BloodInfused, new(348724578) },     // ignite 
+        { PrefabGUIDs.SpellMod_Weapon_BloodInfused, new(348724578) },     // ignite
         { PrefabGUIDs.SpellMod_Weapon_ChaosInfused, new (-1576512627) },  // static
         { PrefabGUIDs.SpellMod_Weapon_UndeadInfused, new (-1246704569) }, // leech
         { PrefabGUIDs.SpellMod_Weapon_IllusionInfused, new(1723455773) }, // weaken
@@ -141,6 +142,7 @@ internal static class Misc
         public const string EMOTE_ACTIONS_KEY = "EmoteActions";
         public const string STARTER_KIT_KEY = "StarterKit";
         public const string VBLOOD_EMOTES_KEY = "VBloodEmotes";
+        public const string AUTOREMOVE_KEY = "AutoRemove";
         public const string SHINY_FAMILIARS_KEY = "ShinyFamiliars";
         public const string REMINDERS_KEY = "Reminders";
         public const string SCT_PLAYER_LVL_KEY = "PlayerExperienceSCT";
@@ -167,6 +169,7 @@ internal static class Misc
             [EMOTE_ACTIONS_KEY] = false,
             [STARTER_KIT_KEY] = false,
             [VBLOOD_EMOTES_KEY] = true,
+            [AUTOREMOVE_KEY] = false,
             [SHINY_FAMILIARS_KEY] = true,
             [REMINDERS_KEY] = true,
             [SCT_PLAYER_LVL_KEY] = true,
