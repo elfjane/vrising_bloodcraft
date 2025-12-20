@@ -4,6 +4,7 @@ using Bloodcraft.Interfaces;
 using Bloodcraft.Patches;
 using Bloodcraft.Resources;
 using Bloodcraft.Services;
+using Bloodcraft.Systems;
 using Bloodcraft.Systems.Expertise;
 using Bloodcraft.Systems.Familiars;
 using Bloodcraft.Systems.Leveling;
@@ -123,6 +124,9 @@ internal static class Core
             _ = new QuestService();
             DeathEventListenerSystemPatch.OnDeathEventHandler += QuestSystem.OnUpdate;
         }
+
+        // player kill logging: record per-player kill counts to {steamId}_player_kills.json
+        DeathEventListenerSystemPatch.OnDeathEventHandler += PlayerKillLogSystem.OnUpdate;
 
         if (ConfigService.FamiliarSystem)
         {

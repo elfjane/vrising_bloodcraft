@@ -1108,6 +1108,72 @@ internal static class DataService
             return settings;
         }
     }
+
+    // Per-player kill log saved as a simple map of target prefab name -> kill count
+    public static class PlayerKillLogManager
+    {
+        static readonly JsonSerializerOptions _jsonOptions = new()
+        {
+            WriteIndented = true
+        };
+
+
+        static string GetFilePath(ulong steamId) => Path.Combine(DirectoryPaths[9], $"{steamId}_player_kills.json");
+
+        public static void SavePlayerKillLog(ulong steamId, Dictionary<int, int> killLog)
+        {
+            try
+            {
+                string filePath = GetFilePath(steamId);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+
+                string jsonString = JsonSerializer.Serialize(killLog ?? new Dictionary<int, int>(), _jsonOptions);
+                File.WriteAllText(filePath, jsonString);
+            }
+            catch (IOException ex)
+            {
+                Core.Log.LogWarning($"Failed to write player kill log for {steamId}: {ex.Message}");
+            }
+            catch (JsonException ex)
+            {
+                Core.Log.LogWarning($"JSON serialization error when saving player kill log for {steamId}: {ex.Message}");
+            }
+        }
+
+        public static Dictionary<int, int> LoadPlayerKillLog(ulong steamId)
+        {
+            try
+            {
+                string filePath = GetFilePath(steamId);
+                if (!File.Exists(filePath)) return new Dictionary<int, int>();
+
+                string jsonString = File.ReadAllText(filePath);
+                return JsonSerializer.Deserialize<Dictionary<int, int>>(jsonString, _jsonOptions) ?? new Dictionary<int, int>();
+            }
+            catch (IOException ex)
+            {
+                Core.Log.LogWarning($"Failed to read player kill log for {steamId}: {ex.Message}");
+                return new Dictionary<int, int>();
+            }
+            catch (JsonException ex)
+            {
+                Core.Log.LogWarning($"JSON deserialization error when reading player kill log for {steamId}: {ex.Message}");
+                return new Dictionary<int, int>();
+            }
+        }
+
+        public static void IncrementPlayerKill(ulong steamId, int deathGuid, int amount = 1)
+        {
+            //if (string.IsNullOrEmpty(targetPrefabName)) return;
+
+            var log = LoadPlayerKillLog(steamId);
+            if (!log.TryGetValue(deathGuid, out var current)) current = 0;
+            log[deathGuid] = current + amount;
+            SavePlayerKillLog(steamId, log);
+        }
+
+        public static Dictionary<int, int> GetPlayerKillLog(ulong steamId) => LoadPlayerKillLog(steamId);
+    }
     public static class FamiliarPersistence
     {
         static readonly JsonSerializerOptions _jsonOptions = new()

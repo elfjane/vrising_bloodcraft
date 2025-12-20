@@ -17,6 +17,7 @@ using static Bloodcraft.Services.LocalizationService;
 using static Bloodcraft.Services.PlayerService;
 
 namespace Bloodcraft;
+
 internal interface IEntityComponentOverrides
 {
     bool TryRead<T>(Entity entity, out T value) where T : struct;
@@ -628,14 +629,18 @@ internal static class VExtensions
     {
         if (!entity.Exists()) return;
 
-        bool isBuff = entity.IsBuff(); // should probably check if this actually matters or not but like... later >_>
+        if (entity.IsBuff())
+        {
+            DestroyUtility.Destroy(
+                EntityManager,
+                entity,
+                DestroyDebugReason.TryRemoveBuff
+            );
+            return;
+        }
 
-        if (immediate && !isBuff)
-            EntityManager.DestroyEntity(entity);
-        else if (isBuff)
-            DestroyUtility.Destroy(EntityManager, entity, DestroyDebugReason.TryRemoveBuff);
-        else
-            DestroyUtility.Destroy(EntityManager, entity);
+        // 永遠只走官方流程
+        DestroyUtility.Destroy(EntityManager, entity);
     }
     public static bool IsBuff(this Entity entity)
     {
