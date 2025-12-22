@@ -30,6 +30,7 @@ using static Bloodcraft.Utilities.Familiars;
 using static Bloodcraft.Utilities.Misc;
 using static Bloodcraft.Utilities.Shapeshifts;
 using WeaponType = Bloodcraft.Interfaces.WeaponType;
+using static Bloodcraft.Systems.Familiars.FamiliarUnlockSystem;
 
 namespace Bloodcraft.Services;
 
@@ -1285,6 +1286,61 @@ internal static class DataService
 
                 string jsonString = File.ReadAllText(filePath);
                 return JsonSerializer.Deserialize<FamiliarBuffsData>(jsonString);
+            }
+        }
+        public static class FamiliarRarityManager
+        {
+            [Serializable]
+            public class FamiliarRarityData
+            {
+                // maps familiar prefab hash -> rarity code (N, R, SR, SSR, SS, SSS)
+                public Dictionary<int, Rarity> FamiliarRarities { get; set; } = new Dictionary<int, Rarity>();
+            }
+
+            static string GetFilePath(ulong steamId) => Path.Combine(DirectoryPaths[8], $"{steamId}_familiar_rarity.json");
+            public static void SaveFamiliarRarityData(ulong steamId, FamiliarRarityData data)
+            {
+                string filePath = GetFilePath(steamId);
+                string jsonString = JsonSerializer.Serialize(data, _jsonOptions);
+
+                File.WriteAllText(filePath, jsonString);
+            }
+            public static FamiliarRarityData LoadFamiliarRarityData(ulong steamId)
+            {
+                string filePath = GetFilePath(steamId);
+                if (!File.Exists(filePath))
+                    return new FamiliarRarityData();
+
+                string jsonString = File.ReadAllText(filePath);
+                FamiliarRarityData data = JsonSerializer.Deserialize<FamiliarRarityData>(jsonString) ?? new FamiliarRarityData();
+
+                data.FamiliarRarities ??= new Dictionary<int, Rarity>();
+
+                return data;
+            }
+            public static Rarity RollRarity(Random rng = null)
+            {
+                var r = rng ?? new Random();
+                int roll = r.Next(0, 1000); // 0–999
+
+                // Probabilities (percents):
+                // N: 55, R: 25, SR: 12, SSR: 6, SS: 1.8, SSS: 0.2
+
+                if (roll < 550) return Rarity.N;
+                roll -= 550;
+
+                if (roll < 250) return Rarity.R;
+                roll -= 250;
+
+                if (roll < 120) return Rarity.SR;
+                roll -= 120;
+
+                if (roll < 60) return Rarity.SSR;
+                roll -= 60;
+
+                if (roll < 18) return Rarity.SS;
+
+                return Rarity.SSS; // 剩下 2
             }
         }
         public static class FamiliarBattleGroupsManager

@@ -26,6 +26,7 @@ using static Bloodcraft.Systems.Familiars.FamiliarBindingSystem;
 using static Bloodcraft.Systems.Familiars.FamiliarUnlockSystem;
 using static Bloodcraft.Utilities.Familiars.ActiveFamiliarManager;
 using static Bloodcraft.Utilities.Misc.PlayerBoolsManager;
+using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager;
 
 namespace Bloodcraft.Utilities;
 
@@ -1237,5 +1238,12 @@ internal static class Familiars
             coffin.Remove<Disabled>();
             coffin.Destroy();
         }
+    }
+
+    public static void UpFamiliarRarity(ulong steamId, int famKey, Rarity rarity)
+    {
+        var rarityData = LoadFamiliarRarityData(steamId);
+        rarityData.FamiliarRarities[famKey] = rarity;
+        SaveFamiliarRarityData(steamId, rarityData);
     }
 }

@@ -319,6 +319,9 @@ Jairon O.; Odjit; Jera; Kokuren TCG and Gaming Shop; Rexxn; Eduardo G.; DirtyMik
 - `.familiar setlevel [玩家] [等級]` 🔒
   - 設定當前寵物等級。
   - Shortcut: *.cw sl [玩家] [等級]*
+- `.familiar setrarity [#] [品階]` 🔒
+  - 調整目前品階。
+  - Shortcut: *.cw sr [#] [品階]*
 - `.familiar shinybuff [法術學派]`
   - 花費吸血鬼塵埃讓你的寵物閃亮！
   - Shortcut: *.cw shiny [法術學派]*

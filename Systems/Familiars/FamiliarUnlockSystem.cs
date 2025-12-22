@@ -9,6 +9,7 @@ using static Bloodcraft.Patches.DeathEventListenerSystemPatch;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarBuffsManager;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarExperienceManager;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarUnlocksManager;
+using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager;
 
 namespace Bloodcraft.Systems.Familiars;
 internal static class FamiliarUnlockSystem
@@ -70,6 +71,52 @@ internal static class FamiliarUnlockSystem
         { new(27300215), "<color=#00FFFF>Frost</color>" },       // chill cyan (Hex: 00FFFF)
         { new(-325758519), "<color=#00FF00>Unholy</color>" }    // condemn green (Hex: 00FF00)
     };
+
+    public enum Rarity
+    {
+        N = 0,
+        R = 1,
+        SR = 2,
+        SSR = 3,
+        SS = 4,
+        SSS = 5,
+        EX = 6
+    }
+
+    // --- Rarity definitions ---
+    public static readonly Dictionary<Rarity, string> RarityChineseNames = new()
+    {
+        { Rarity.N, "普通" },
+        { Rarity.R, "稀有" },
+        { Rarity.SR, "精良" },
+        { Rarity.SSR, "史詩" },
+        { Rarity.SS, "傳說" },
+        { Rarity.SSS, "神話" },
+        { Rarity.EX, "永恆" }
+    };
+
+    public static readonly Dictionary<Rarity, string> RarityColorHexes = new()
+    {
+        { Rarity.N, "#9E9E9E" },
+        { Rarity.R, "#4CAF50" },
+        { Rarity.SR, "#2196F3" },
+        { Rarity.SSR, "#9C27B0" },
+        { Rarity.SS, "#FFC107" },
+        { Rarity.SSS, "#FF5252" },
+        { Rarity.EX, "#B11226" }
+    };
+
+    // percent change to power (e.g. N = -50 => multiply by 0.5)
+    public static readonly Dictionary<Rarity, float> RarityPowerPercent = new()
+    {
+        { Rarity.N, 0.5f },
+        { Rarity.R, 0.3f },
+        { Rarity.SR, 1f },
+        { Rarity.SSR, 1.1f },
+        { Rarity.SS, 1.3f },
+        { Rarity.SSS, 1.5f },
+        { Rarity.EX, 10f }
+    };
     public static void OnUpdate(object sender, DeathEventArgs deathEvent)
     {
         if (!_shareUnlocks) ProcessUnlock(deathEvent.Source, deathEvent.Target);
@@ -121,19 +168,37 @@ internal static class FamiliarUnlockSystem
             HandleUnlock(targetPrefabGuid, playerCharacter, target);
         }
     }
+    public static string GetRarityName(Rarity rarity)
+    {
+        if (RarityChineseNames.TryGetValue(rarity, out var rn))
+        {
+            return rn;
+        }
+        return "";
+    }
+
+    public static string GetRarityHex(Rarity rarity)
+    {
+        if (RarityColorHexes.TryGetValue(rarity, out var rn))
+        {
+            return rn;
+        }
+        return "#FFFFFF";
+    }
     static void HandleUnlock(PrefabGUID targetPrefabGuid, Entity playerCharacter, Entity target)
     {
         User user = playerCharacter.GetUser();
         ulong steamId = user.PlatformId;
         int famKey = targetPrefabGuid.GuidHash;
 
+        // 取得或建立解鎖資料
         FamiliarUnlocksData data = LoadFamiliarUnlocksData(steamId);
         string lastListName = data.FamiliarUnlocks.Keys.LastOrDefault();
 
         if (string.IsNullOrEmpty(lastListName) || data.FamiliarUnlocks[lastListName].Count >= 10)
         {
             lastListName = $"box{data.FamiliarUnlocks.Count + 1}";
-            data.FamiliarUnlocks[lastListName] = [];
+            data.FamiliarUnlocks[lastListName] = new List<int>();
 
             if (steamId.TryGetFamiliarBox(out var box) && string.IsNullOrEmpty(box))
             {
@@ -159,6 +224,30 @@ internal static class FamiliarUnlockSystem
             }
         }
 
+        // Roll rarity（不管是否已解鎖都 roll 一次）
+        var rarityData = LoadFamiliarRarityData(steamId);
+        Rarity newRarity = RollRarity(_random);
+
+        bool isUpgraded = false;
+
+        if (rarityData.FamiliarRarities.TryGetValue(famKey, out var currentRarity))
+        {
+            if (newRarity > currentRarity)
+            {
+                rarityData.FamiliarRarities[famKey] = newRarity;
+                isUpgraded = true;
+            }
+        }
+        else
+        {
+            // 尚未有 rarity，直接設定
+            rarityData.FamiliarRarities[famKey] = newRarity;
+            isUpgraded = true;
+        }
+
+        SaveFamiliarRarityData(steamId, rarityData);
+
+        // 如果還沒解鎖，加入清單、設定經驗
         if (!isAlreadyUnlocked)
         {
             List<int> currentList = data.FamiliarUnlocks[lastListName];
@@ -169,25 +258,49 @@ internal static class FamiliarUnlockSystem
             famData.FamiliarExperience[famKey] = new(FamiliarBindingSystem.BASE_LEVEL, Progression.ConvertLevelToXp(FamiliarBindingSystem.BASE_LEVEL));
             SaveFamiliarExperienceData(steamId, famData);
 
-            isShiny = HandleShiny(famKey, steamId, _shinyChance);
             playerCharacter.PlaySequence(_unlockSequence);
+        }
 
+        // shiny 判定（如果尚未處理）
+        if (!isShiny)
+        {
+            isShiny = HandleShiny(famKey, steamId, _shinyChance);
+        }
+
+        // 顯示訊息
+        Rarity finalRarity = rarityData.FamiliarRarities[famKey];
+        string rarityName = GetRarityName(finalRarity);
+        string rarityHex = GetRarityHex(finalRarity);
+
+        if (!isAlreadyUnlocked)
+        {
             if (!isShiny)
             {
-                LocalizationService.HandleServerReply(EntityManager, user, $"New unit unlocked: <color=green>{targetPrefabGuid.GetLocalizedName()}</color>");
+                LocalizationService.HandleServerReply(EntityManager, user,
+                    $"抓到新寵物: <color=green>{targetPrefabGuid.GetLocalizedName()}</color> (<color={rarityHex}>{rarityName}</color>)");
             }
-            else if (isShiny)
+            else
             {
                 playerCharacter.PlaySequence(_shinySequence);
-                LocalizationService.HandleServerReply(EntityManager, user, $"New <color=#00FFFF>shiny</color> unit unlocked: <color=green>{targetPrefabGuid.GetLocalizedName()}</color>");
+                LocalizationService.HandleServerReply(EntityManager, user,
+                    $"New <color=#00FFFF>shiny</color> unit unlocked: <color=green>{targetPrefabGuid.GetLocalizedName()}</color> (<color={rarityHex}>{rarityName}</color>)");
             }
+        }
+        else if (isUpgraded)
+        {
+            // 已解鎖但升級
+            LocalizationService.HandleServerReply(EntityManager, user,
+                    $"<color={rarityHex}>取得 {targetPrefabGuid.GetLocalizedName()}({rarityName})</color>");
         }
         else if (isShiny)
         {
             playerCharacter.PlaySequence(_shinySequence);
-            LocalizationService.HandleServerReply(EntityManager, user, $"<color=#00FFFF>Shiny</color> unlocked: <color=green>{targetPrefabGuid.GetLocalizedName()}</color>");
+            LocalizationService.HandleServerReply(EntityManager, user,
+                $"<color=#00FFFF>Shiny</color> unlocked: <color=green>{targetPrefabGuid.GetLocalizedName()}</color>");
         }
     }
+
+
     public static bool HandleShiny(int famKey, ulong steamId, float chance, int choice = -1)
     {
         FamiliarBuffsData buffsData = LoadFamiliarBuffsData(steamId);

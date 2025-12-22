@@ -17,6 +17,8 @@ using static Bloodcraft.Services.DataService.FamiliarPersistence;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarBuffsManager;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarEquipmentManager;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarExperienceManager;
+using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager;
+using static Bloodcraft.Systems.Familiars.FamiliarUnlockSystem;
 using static Bloodcraft.Utilities.Misc.PlayerBoolsManager;
 using static Bloodcraft.Utilities.Progression;
 
@@ -510,6 +512,18 @@ internal static class FamiliarBindingSystem
         familiarUnitStats.PhysicalPower._Value = unitStats.PhysicalPower._Value * powerFactor; // scaling these with prestige not a great idea in retrospect, nerfed that a bit but they also start at higher base power per prestige then probably rebalancing when equipment stats come into play
         familiarUnitStats.SpellPower._Value = unitStats.SpellPower._Value * powerFactor;
 
+        // Apply rarity multiplier (if any)
+        float rarityMultiplier = 0.5f;
+        var rarityData = LoadFamiliarRarityData(steamId);
+        if (rarityData != null && rarityData.FamiliarRarities.TryGetValue(famKey, out var rarityCode))
+        {
+            float percent = RarityPowerPercent.TryGetValue(rarityCode, out var pct) ? pct : 1f;
+            rarityMultiplier = percent;
+        }
+
+        familiarUnitStats.PhysicalPower._Value *= rarityMultiplier;
+        familiarUnitStats.SpellPower._Value *= rarityMultiplier;
+
         /*
         foreach (FamiliarStatType prestigeStat in familiarPrestigeStats)
         {
@@ -567,6 +581,9 @@ internal static class FamiliarBindingSystem
         {
             maxHealth *= healthFactor;
         }
+
+        // Apply rarity multiplier to health as well
+        maxHealth *= rarityMultiplier;
 
         familiar.With((ref Health health) =>
         {

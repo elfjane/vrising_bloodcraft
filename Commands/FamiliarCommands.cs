@@ -19,6 +19,7 @@ using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarBuffsMa
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarExperienceManager;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarPrestigeManager;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarUnlocksManager;
+using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager;
 using static Bloodcraft.Services.PlayerService;
 using static Bloodcraft.Systems.Familiars.FamiliarBindingSystem;
 using static Bloodcraft.Systems.Familiars.FamiliarLevelingSystem;
@@ -138,11 +139,17 @@ internal static class FamiliarCommands
                     }
                 }
 
+                // rarity display
+                var rarityData = LoadFamiliarRarityData(steamId);
+                Rarity rarityCode = rarityData.FamiliarRarities.TryGetValue(famKey, out var rc) ? rc : Rarity.N;
+                string rarityName = GetRarityName(rarityCode);
+                string rarityHex = GetRarityHex(rarityCode);
+
                 int level = familiarExperienceData.FamiliarExperience.TryGetValue(famKey, out var experienceData) ? experienceData.Key : 1;
                 int prestiges = familiarPrestigeData_V2.FamiliarPrestige.TryGetValue(famKey, out var prestigeData) ? prestigeData : 0;
 
                 string levelAndPrestiges = prestiges > 0 ? $"[<color=white>{level}</color>][<color=#90EE90>{prestiges}</color>]" : $"[<color=white>{level}</color>]";
-                LocalizationService.HandleReply(ctx, $"<color=yellow>{count}</color>| <color=green>{famName}</color>{(familiarBuffsData.FamiliarBuffs.ContainsKey(famKey) ? $"{colorCode}*</color> {levelAndPrestiges}" : $" {levelAndPrestiges}")}");
+                LocalizationService.HandleReply(ctx, $"<color=yellow>{count}</color>| <color=green>{famName}</color> <color={rarityHex}>[{rarityName}]</color>{(familiarBuffsData.FamiliarBuffs.ContainsKey(famKey) ? $"{colorCode}*</color> {levelAndPrestiges}" : $" {levelAndPrestiges}")}");
                 count++;
             }
         }
@@ -1798,5 +1805,43 @@ internal static class FamiliarCommands
 
             LocalizationService.HandleReply(ctx, "寵物競技場位置已更改！(目前僅允許一個競技場)");
         }
+    }
+    [Command(name: "setrarity", shortHand: "sr", adminOnly: true, usage: ".cw sr [#] [品階]", description: "調整目前品階。")]
+    public static void SetFamiliarRarity(ChatCommandContext ctx, int choice, Rarity rarity)
+    {
+        if (!ConfigService.FamiliarSystem)
+        {
+            LocalizationService.HandleReply(ctx, "寵物系統未啟用。");
+            return;
+        }
+
+        ulong steamId = ctx.User.PlatformId;
+        FamiliarUnlocksData data = LoadFamiliarUnlocksData(steamId);
+
+        // 取得當前活動列表
+        if (!steamId.TryGetFamiliarBox(out var activeBox) || !data.FamiliarUnlocks.TryGetValue(activeBox, out var sourceSet))
+        {
+            LocalizationService.HandleReply(ctx, "找不到活動的列表！");
+            return;
+        }
+
+        if (choice < 1 || choice > sourceSet.Count)
+        {
+            LocalizationService.HandleReply(ctx, $"無效的選擇，請使用 <color=white>1</color> 到 <color=white>{sourceSet.Count}</color> (當前清單:<color=yellow>{activeBox}</color>)");
+            return;
+        }
+
+        string rarityName = GetRarityName(rarity);
+        if (rarityName.IsNullOrWhiteSpace())
+        {
+            LocalizationService.HandleReply(ctx, "無效的品階名稱！");
+            return;
+        }
+        string rarityHex = RarityColorHexes.TryGetValue(rarity, out var rh) ? rh : "";
+        int familiarId = sourceSet[choice - 1];
+        UpFamiliarRarity(steamId, familiarId, rarity);
+
+        PrefabGUID targetPrefabGuid = new(familiarId);
+        LocalizationService.HandleReply(ctx, $"已將 <color=green>{targetPrefabGuid.GetLocalizedName()}</color>品階提昇至(<color={rarityHex}>{rarityName}</color>)");
     }
 }
