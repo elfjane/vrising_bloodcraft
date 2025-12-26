@@ -231,7 +231,7 @@ internal class LocalizationService // the bones are from KindredCommands, ty Odj
         }
         else
         {
-            Plugin.LogInstance.LogInfo($"[尚未翻譯] {message}");
+            //Plugin.LogInstance.LogInfo($"[尚未翻譯] {message}");
             ctx.Reply(message);
         }
     }
