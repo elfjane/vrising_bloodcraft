@@ -433,6 +433,14 @@ internal static class ConfigService
     static readonly Lazy<int> _prestigeCostItemQuantity = new(() => GetConfigValue<int>("PrestigeCostItemQuantity"));
     public static int PrestigeCostItemQuantity => _prestigeCostItemQuantity.Value;
 
+    // Familiar upgrade configuration (string mappings: e.g. "N:1,R:2,SR:5,SSR:10,SS:20,SSS:50")
+    static readonly Lazy<string> _familiarUpgradeCrystalCosts = new(() => GetConfigValue<string>("FamiliarUpgradeCrystalCosts"));
+    public static string FamiliarUpgradeCrystalCosts => _familiarUpgradeCrystalCosts.Value;
+
+    // Familiar upgrade success chances (string mappings: e.g. "N:0.9,R:0.6,SR:0.3,SSR:0.15,SS:0.05,SSS:0.01")
+    static readonly Lazy<string> _familiarUpgradeChances = new(() => GetConfigValue<string>("FamiliarUpgradeChances"));
+    public static string FamiliarUpgradeChances => _familiarUpgradeChances.Value;
+
     static readonly Lazy<bool> _classSystem = new(() => GetConfigValue<bool>("ClassSystem"));
     public static bool ClassSystem => _classSystem.Value;
 
@@ -693,6 +701,8 @@ internal static class ConfigService
             new ConfigEntryDefinition("Familiars", "ShinyChance", 0.2f, "The chance for a shiny when unlocking familiars (6 total buffs, 1 buff per familiar). Guaranteed on second unlock of same unit, chance on damage dealt (same as configured onHitEffect chance) to apply spell school debuff."),
             new ConfigEntryDefinition("Familiars", "ShinyCostItemQuantity", 100, "Quantity of vampiric dust required to make a familiar shiny. May also be spent to change shiny familiar's shiny buff at 25% cost. Enable ExtraRecipes to allow player refinement of this item from Advanced Grinders. Valid values are between 50-200, if outside that range in either direction it will be clamped."),
             new ConfigEntryDefinition("Familiars", "PrestigeCostItemQuantity", 1000, "Quantity of schematics required to immediately prestige familiar (gain total levels equal to max familiar level, extra levels remaining from the amount needed to prestige will be added to familiar after prestiging). Valid values are between 500-2000, if outside that range in either direction it will be clamped."),
+            new ConfigEntryDefinition("Familiars", "FamiliarUpgradeCrystalCosts", "N:1,R:2,SR:5,SSR:10,SS:20,SSS:50", "Mapping of rarity -> crystal cost for upgrading from that rarity to the next (format: N:1,R:2,...)."),
+            new ConfigEntryDefinition("Familiars", "FamiliarUpgradeChances", "N:0.90,R:0.60,SR:0.30,SSR:0.15,SS:0.05,SSS:0.01", "Mapping of rarity -> success chance for upgrading from that rarity to the next (0-1 format: N:0.9,R:0.6,...)."),
 
             new ConfigEntryDefinition("Classes", "ClassSystem", false, "Enable classes without synergy restrictions."),
             new ConfigEntryDefinition("Classes", "ChangeClassItem", 576389135, "Item PrefabGUID cost for changing class."),

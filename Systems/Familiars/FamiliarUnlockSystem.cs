@@ -10,6 +10,7 @@ using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarBuffsMa
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarExperienceManager;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarUnlocksManager;
 using static Bloodcraft.Services.DataService.FamiliarPersistence.FamiliarRarityManager;
+using static Bloodcraft.Utilities.Familiars;
 
 namespace Bloodcraft.Systems.Familiars;
 internal static class FamiliarUnlockSystem
@@ -35,6 +36,8 @@ internal static class FamiliarUnlockSystem
 
     public static readonly HashSet<PrefabGUID> ConfiguredPrefabGuidBans = [];
     public static readonly HashSet<UnitCategory> ConfiguredCategoryBans = [];
+    static SystemService SystemService => Core.SystemService;
+    static PrefabCollectionSystem PrefabCollectionSystem => SystemService.PrefabCollectionSystem;
 
     static readonly HashSet<string> _defaultNameBans =
     [
@@ -84,39 +87,19 @@ internal static class FamiliarUnlockSystem
     }
 
     // --- Rarity definitions ---
-    public static readonly Dictionary<Rarity, string> RarityChineseNames = new()
+    public record RarityInfo(string ChineseName, string ColorHex, float PowerPercent, int AutoRemoveRewardQty);
+
+    public static readonly Dictionary<Rarity, RarityInfo> RarityInfoMap = new()
     {
-        { Rarity.N, "普通" },
-        { Rarity.R, "稀有" },
-        { Rarity.SR, "精良" },
-        { Rarity.SSR, "史詩" },
-        { Rarity.SS, "傳說" },
-        { Rarity.SSS, "神話" },
-        { Rarity.EX, "永恆" }
+        { Rarity.N, new("普通", "#9E9E9E", 0.5f, 1) },
+        { Rarity.R, new("稀有", "#4CAF50", 0.3f, 1) },
+        { Rarity.SR, new("精良", "#2196F3", 1f, 2) },
+        { Rarity.SSR, new("史詩", "#9C27B0", 1.1f, 2) },
+        { Rarity.SS, new("傳說", "#FFC107", 1.3f, 5) },
+        { Rarity.SSS, new("神話", "#FF5252", 1.5f, 10) },
+        { Rarity.EX, new("永恆", "#B11226", 10f, 100) }
     };
 
-    public static readonly Dictionary<Rarity, string> RarityColorHexes = new()
-    {
-        { Rarity.N, "#9E9E9E" },
-        { Rarity.R, "#4CAF50" },
-        { Rarity.SR, "#2196F3" },
-        { Rarity.SSR, "#9C27B0" },
-        { Rarity.SS, "#FFC107" },
-        { Rarity.SSS, "#FF5252" },
-        { Rarity.EX, "#B11226" }
-    };
-
-    // percent change to power (e.g. N = -50 => multiply by 0.5)
-    public static readonly Dictionary<Rarity, float> RarityPowerPercent = new()
-    {
-        { Rarity.N, 0.5f },
-        { Rarity.R, 0.3f },
-        { Rarity.SR, 1f },
-        { Rarity.SSR, 1.1f },
-        { Rarity.SS, 1.3f },
-        { Rarity.SSS, 1.5f },
-        { Rarity.EX, 10f }
-    };
     public static void OnUpdate(object sender, DeathEventArgs deathEvent)
     {
         if (!_shareUnlocks) ProcessUnlock(deathEvent.Source, deathEvent.Target);
@@ -170,18 +153,18 @@ internal static class FamiliarUnlockSystem
     }
     public static string GetRarityName(Rarity rarity)
     {
-        if (RarityChineseNames.TryGetValue(rarity, out var rn))
+        if (RarityInfoMap.TryGetValue(rarity, out var info))
         {
-            return rn;
+            return info.ChineseName;
         }
         return "";
     }
 
     public static string GetRarityHex(Rarity rarity)
     {
-        if (RarityColorHexes.TryGetValue(rarity, out var rn))
+        if (RarityInfoMap.TryGetValue(rarity, out var info))
         {
-            return rn;
+            return info.ColorHex;
         }
         return "#FFFFFF";
     }
@@ -244,6 +227,44 @@ internal static class FamiliarUnlockSystem
             rarityData.FamiliarRarities[famKey] = newRarity;
             isUpgraded = true;
         }
+        // 顯示訊息
+        Rarity finalRarity = rarityData.FamiliarRarities[famKey];
+        string rarityName = GetRarityName(finalRarity);
+        string rarityHex = GetRarityHex(finalRarity);
+
+        if (!isAlreadyUnlocked && GetAutoSellFamiliars(steamId) == 1 && newRarity < Rarity.SSS)
+        {
+            PrefabGUID familiarId = new(famKey);
+
+            // Determine if this is a VBlood (boss) prefab - only non-VBlood get the auto-remove reward
+            bool isVBlood = false;
+            if (PrefabCollectionSystem._PrefabGuidToEntityMap.TryGetValue(familiarId, out Entity prefabEntity))
+            {
+                isVBlood = prefabEntity.Has<VBloodConsumeSource>() || prefabEntity.Has<VBloodUnit>();
+            }
+
+            // Give configured auto-remove reward if applicable
+            PrefabGUID rewardItem = AutoRemoveRewardItem;
+            int qty = AutoRemoveRewardQty * RarityInfoMap[finalRarity].AutoRemoveRewardQty;
+
+            if (!isVBlood && !(rewardItem.Equals(new PrefabGUID(0)) || qty <= 0))
+            {
+                Misc.GiveOrDropItemOutMessage(user, playerCharacter, rewardItem, qty);
+
+                if (!isShiny)
+                {
+                    LocalizationService.HandleServerReply(EntityManager, user,
+                        $"自動販售抓到新寵物: <color=green>{targetPrefabGuid.GetLocalizedName()}</color> (<color={rarityHex}>{rarityName}</color>)，並獲得了 <color=white>{rewardItem.GetLocalizedName()}</color>x<color=white>{qty}</color>。");
+                }
+                else
+                {
+                    playerCharacter.PlaySequence(_shinySequence);
+                    LocalizationService.HandleServerReply(EntityManager, user,
+                        $"自動販售抓到新寵物: <color=#00FFFF>shiny</color> <color=green>{targetPrefabGuid.GetLocalizedName()}</color> (<color={rarityHex}>{rarityName}</color>)，並獲得了 <color=white>{rewardItem.GetLocalizedName()}</color>x<color=white>{qty}</color>。");
+                }
+                return;
+            }
+        }
 
         SaveFamiliarRarityData(steamId, rarityData);
 
@@ -266,11 +287,6 @@ internal static class FamiliarUnlockSystem
         {
             isShiny = HandleShiny(famKey, steamId, _shinyChance);
         }
-
-        // 顯示訊息
-        Rarity finalRarity = rarityData.FamiliarRarities[famKey];
-        string rarityName = GetRarityName(finalRarity);
-        string rarityHex = GetRarityHex(finalRarity);
 
         if (!isAlreadyUnlocked)
         {

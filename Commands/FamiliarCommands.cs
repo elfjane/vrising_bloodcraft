@@ -11,6 +11,7 @@ using Unity.Entities;
 using Unity.Mathematics;
 using Unity.Transforms;
 using UnityEngine;
+using System.Globalization;
 using VampireCommandFramework;
 using static Bloodcraft.Services.BattleService;
 using static Bloodcraft.Services.DataService.FamiliarPersistence;
@@ -52,6 +53,64 @@ internal static class FamiliarCommands
     const int VAMPIRIC_DUST_MAX = 200;
     const int ECHOES_MIN = 1;
     const int ECHOES_MAX = 4;
+
+    // Crystal-based rarity upgrade configuration (defaults provided). These will be overridden by config entries if present.
+    static readonly Dictionary<Rarity, int> _upgradeCrystalCost = ParseUpgradeCrystalCosts(ConfigService.FamiliarUpgradeCrystalCosts);
+
+    static readonly Dictionary<Rarity, float> _upgradeChance = ParseUpgradeChances(ConfigService.FamiliarUpgradeChances);
+
+    static Dictionary<Rarity, int> ParseUpgradeCrystalCosts(string cfg)
+    {
+        var defaults = new Dictionary<Rarity, int>()
+        {
+            { Rarity.N, 1 },
+            { Rarity.R, 2 },
+            { Rarity.SR, 5 },
+            { Rarity.SSR, 10 },
+            { Rarity.SS, 20 }
+        };
+
+        if (string.IsNullOrWhiteSpace(cfg)) return defaults;
+
+        var result = new Dictionary<Rarity, int>(defaults);
+        foreach (var pair in cfg.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = pair.Split(':', 2);
+            if (kv.Length != 2) continue;
+            var key = kv[0].Trim();
+            var valStr = kv[1].Trim();
+            if (!int.TryParse(valStr, out var val)) continue;
+            if (Enum.TryParse<Rarity>(key, true, out var rarity)) result[rarity] = val;
+        }
+        return result;
+    }
+
+    static Dictionary<Rarity, float> ParseUpgradeChances(string cfg)
+    {
+        var defaults = new Dictionary<Rarity, float>()
+        {
+            { Rarity.N, 0.90f },
+            { Rarity.R, 0.60f },
+            { Rarity.SR, 0.30f },
+            { Rarity.SSR, 0.15f },
+            { Rarity.SS, 0.05f },
+            { Rarity.SSS, 0.01f }
+        };
+
+        if (string.IsNullOrWhiteSpace(cfg)) return defaults;
+
+        var result = new Dictionary<Rarity, float>(defaults);
+        foreach (var pair in cfg.Split(',', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var kv = pair.Split(':', 2);
+            if (kv.Length != 2) continue;
+            var key = kv[0].Trim();
+            var valStr = kv[1].Trim();
+            if (!float.TryParse(valStr, NumberStyles.Float, CultureInfo.InvariantCulture, out var val)) continue;
+            if (Enum.TryParse<Rarity>(key, true, out var rarity)) result[rarity] = val;
+        }
+        return result;
+    }
 
     static readonly int _minLevel = PrefabCollectionSystem._PrefabGuidToEntityMap[PrefabGUIDs.CHAR_Forest_Wolf_VBlood].GetUnitLevel();
     static readonly int _maxLevel = PrefabCollectionSystem._PrefabGuidToEntityMap[PrefabGUIDs.CHAR_Vampire_Dracula_VBlood].GetUnitLevel();
@@ -621,8 +680,8 @@ internal static class FamiliarCommands
             }
 
             // Give configured auto-remove reward if applicable
-            PrefabGUID rewardItem = new(ConfigService.AutoRemoveItem);
-            int qty = ConfigService.AutoRemoveItemQuantity;
+            PrefabGUID rewardItem = AutoRemoveRewardItem;
+            int qty = AutoRemoveRewardQty;
 
             if (!isVBlood && !(rewardItem.Equals(new PrefabGUID(0)) || qty <= 0))
             {
@@ -656,6 +715,14 @@ internal static class FamiliarCommands
             {
                 buffsData.FamiliarBuffs.Remove(famKey);
                 SaveFamiliarBuffsData(steamId, buffsData);
+            }
+
+            // Also remove rarity data for this familiar if present
+            var rarityData = LoadFamiliarRarityData(steamId);
+            if (rarityData.FamiliarRarities.ContainsKey(famKey))
+            {
+                rarityData.FamiliarRarities.Remove(famKey);
+                SaveFamiliarRarityData(steamId, rarityData);
             }
 
             SaveFamiliarUnlocksData(steamId, data);
@@ -1488,6 +1555,77 @@ internal static class FamiliarCommands
         }
     }
 
+    [Command(name: "up", adminOnly: false, usage: ".cw up [#]", description: "消耗水晶嘗試提升指定編號寵物的品階（依機率）。")]
+    public static void UpgradeFamiliarCommand(ChatCommandContext ctx, int choice)
+    {
+        if (!ConfigService.FamiliarSystem)
+        {
+            LocalizationService.HandleReply(ctx, "寵物系統未啟用。");
+            return;
+        }
+
+        ulong steamId = ctx.User.PlatformId;
+        FamiliarUnlocksData data = LoadFamiliarUnlocksData(steamId);
+
+        if (steamId.TryGetFamiliarBox(out var activeBox) && data.FamiliarUnlocks.TryGetValue(activeBox, out var familiarSet))
+        {
+            if (choice < 1 || choice > familiarSet.Count)
+            {
+                LocalizationService.HandleReply(ctx, $"無效的選擇，請使用 <color=white>1</color> 到 <color=white>{familiarSet.Count}</color> (當前清單:<color=yellow>{activeBox}</color>)");
+                return;
+            }
+
+            int famKey = familiarSet[choice - 1];
+            PrefabGUID familiarId = new(famKey);
+
+            var rarityData = LoadFamiliarRarityData(steamId);
+            Rarity currentRarity = rarityData.FamiliarRarities.TryGetValue(famKey, out var r) ? r : Rarity.N;
+
+            if (currentRarity == Rarity.SSS)
+            {
+                LocalizationService.HandleReply(ctx, $"{familiarId.GetLocalizedName()} 已達到最高品階，不可再提升。");
+                return;
+            }
+
+            Rarity nextRarity = (Rarity)((int)currentRarity + 1);
+            int cost = _upgradeCrystalCost.TryGetValue(currentRarity, out var c) ? c : 1;
+            float chance = _upgradeChance.TryGetValue(currentRarity, out var ch) ? ch : 0f;
+
+            Entity character = ctx.Event.SenderCharacterEntity;
+            PrefabGUID crystal = new(-257494203);
+            if (InventoryUtilities.TryGetInventoryEntity(EntityManager, character, out Entity inventoryEntity) && ServerGameManager.GetInventoryItemCount(inventoryEntity, crystal) >= cost)
+            {
+                if (ServerGameManager.TryRemoveInventoryItem(inventoryEntity, crystal, cost))
+                {
+                    // roll for success
+                    if (chance >= 1f || Misc.RollForChance(chance))
+                    {
+                        Familiars.UpFamiliarRarity(steamId, famKey, nextRarity);
+                        string hex = GetRarityHex(nextRarity);
+                        string name = GetRarityName(nextRarity);
+                        LocalizationService.HandleReply(ctx, $"升品成功！<color=green>{familiarId.GetLocalizedName()}</color> 現在為 <color={hex}>[{name}]</color>，扣除<color=#ffd9eb>{crystal.GetLocalizedName()}</color>！(x<color=white>{cost}</color>)。 ");
+                    }
+                    else
+                    {
+                        LocalizationService.HandleReply(ctx, $"升品失敗... <color=yellow>{familiarId.GetLocalizedName()}</color> 未改變，扣除<color=#ffd9eb>{crystal.GetLocalizedName()}</color>！(x<color=white>{cost}</color>)。 ");
+                    }
+                }
+                else
+                {
+                    LocalizationService.HandleReply(ctx, "消耗水晶失敗，請稍後再試。");
+                }
+            }
+            else
+            {
+                LocalizationService.HandleReply(ctx, $"你沒有足夠的 <color=#ffd9eb>{crystal.GetLocalizedName()}</color>！(x<color=white>{cost}</color>)");
+            }
+        }
+        else
+        {
+            LocalizationService.HandleReply(ctx, "找不到要升品的活動寵物列表...");
+        }
+    }
+
     [Command(name: "toggleoption", shortHand: "option", adminOnly: false, usage: ".cw option [設定]", description: "切換各種寵物設定。")]
     public static void ToggleFamiliarSettingCommand(ChatCommandContext ctx, string option)
     {
@@ -1837,11 +1975,35 @@ internal static class FamiliarCommands
             LocalizationService.HandleReply(ctx, "無效的品階名稱！");
             return;
         }
-        string rarityHex = RarityColorHexes.TryGetValue(rarity, out var rh) ? rh : "";
+        string rarityHex = GetRarityHex(rarity);
         int familiarId = sourceSet[choice - 1];
         UpFamiliarRarity(steamId, familiarId, rarity);
 
         PrefabGUID targetPrefabGuid = new(familiarId);
         LocalizationService.HandleReply(ctx, $"已將 <color=green>{targetPrefabGuid.GetLocalizedName()}</color>品階提昇至(<color={rarityHex}>{rarityName}</color>)");
+    }
+
+    [Command(name: "autoremove", shortHand: "ar", adminOnly: false, usage: ".cw ar", description: "自動售出抓到的寵物。")]
+    public static void SetAutoRemoveFamiliar(ChatCommandContext ctx)
+    {
+        if (!ConfigService.FamiliarSystem)
+        {
+            LocalizationService.HandleReply(ctx, "寵物系統未啟用。");
+            return;
+        }
+
+        ulong steamId = ctx.User.PlatformId;
+
+        if (GetAutoSellFamiliars(steamId) == 1)
+        {
+
+            SetAutoSellFamiliars(steamId, 0);
+            LocalizationService.HandleReply(ctx, "已停用自動售出抓到的寵物。");
+        }
+        else
+        {
+            SetAutoSellFamiliars(steamId, 1);
+            LocalizationService.HandleReply(ctx, "已啟用自動售出抓到的寵物。");
+        }
     }
 }

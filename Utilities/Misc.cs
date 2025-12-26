@@ -388,6 +388,25 @@ internal static class Misc
             LocalizationService.HandleServerReply(EntityManager, user, message);
         }
     }
+
+    public static void GiveOrDropItemOutMessage(User user, Entity playerCharacter, PrefabGUID itemType, int amount)
+    {
+        var itemDataHashMap = GameDataSystem.ItemHashLookupMap;
+        bool hasSpace = InventoryUtilities.HasFreeStackSpaceOfType(EntityManager, playerCharacter, itemDataHashMap, itemType, amount);
+        string message;
+        if (hasSpace && ServerGameManager.TryAddInventoryItem(playerCharacter, itemType, amount))
+        {
+            // message = "Your bag feels slightly heavier...";
+            // LocalizationService.HandleServerReply(EntityManager, user, message);
+        }
+        else
+        {
+            message = "你身上物品滿了，掉落在你腳下！";
+            InventoryUtilitiesServer.CreateDropItem(EntityManager, playerCharacter, itemType, amount, new Entity()); // does this create multiple drops to account for excessive stacks? noting for later
+            LocalizationService.HandleServerReply(EntityManager, user, message);
+        }
+    }
+
     public static bool RollForChance(float chance)
     {
         return _random.NextDouble() < chance;

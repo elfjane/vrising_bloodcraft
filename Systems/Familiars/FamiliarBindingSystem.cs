@@ -517,7 +517,7 @@ internal static class FamiliarBindingSystem
         var rarityData = LoadFamiliarRarityData(steamId);
         if (rarityData != null && rarityData.FamiliarRarities.TryGetValue(famKey, out var rarityCode))
         {
-            float percent = RarityPowerPercent.TryGetValue(rarityCode, out var pct) ? pct : 1f;
+            float percent = RarityInfoMap.TryGetValue(rarityCode, out var info) ? info.PowerPercent : 1f;
             rarityMultiplier = percent;
         }
 

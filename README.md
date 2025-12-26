@@ -238,6 +238,9 @@ Jairon O.; Odjit; Jera; Kokuren TCG and Gaming Shop; Rexxn; Eduardo G.; DirtyMik
 - `.familiar addbox [列表名稱]`
   - 新增一個指定名稱的空列表。
   - Shortcut: *.cw ab [列表名稱]*
+- `.familiar autoremove`
+  - 自動售出抓到的寵物。
+  - Shortcut: *.cw ar*
 - `.familiar bind [#]`
   - 從當前清單啟用指定的寵物。
   - Shortcut: *.cw b [#]*
@@ -343,6 +346,9 @@ Jairon O.; Odjit; Jera; Kokuren TCG and Gaming Shop; Rexxn; Eduardo G.; DirtyMik
 - `.familiar unbind`
   - 解除招喚當前寵物。
   - Shortcut: *.cw ub*
+- `.familiar up [#]`
+  - 消耗水晶嘗試提升指定編號寵物的品階（依機率）。
+  - Shortcut: *.cw up [#]*
 
 ### Level Commands
 - `.level get`
@@ -767,6 +773,10 @@ Jairon O.; Odjit; Jera; Kokuren TCG and Gaming Shop; Rexxn; Eduardo G.; DirtyMik
   Quantity of vampiric dust required to make a familiar shiny. May also be spent to change shiny familiar's shiny buff at 25% cost. Enable ExtraRecipes to allow player refinement of this item from Advanced Grinders. Valid values are between 50-200, if outside that range in either direction it will be clamped.
 - **Prestige Cost Item Quantity**: `PrestigeCostItemQuantity` (int, default: 1000)
   Quantity of schematics required to immediately prestige familiar (gain total levels equal to max familiar level, extra levels remaining from the amount needed to prestige will be added to familiar after prestiging). Valid values are between 500-2000, if outside that range in either direction it will be clamped.
+- **Familiar Upgrade Crystal Costs**: `FamiliarUpgradeCrystalCosts` (string, default: "N:1,R:2,SR:5,SSR:10,SS:20,SSS:50")
+  Mapping of rarity -> crystal cost for upgrading from that rarity to the next (format: N:1,R:2,...).
+- **Familiar Upgrade Chances**: `FamiliarUpgradeChances` (string, default: "N:0.90,R:0.60,SR:0.30,SSR:0.15,SS:0.05,SSS:0.01")
+  Mapping of rarity -> success chance for upgrading from that rarity to the next (0-1 format: N:0.9,R:0.6,...).
 
 ### Classes
 - **Class System**: `ClassSystem` (bool, default: False)

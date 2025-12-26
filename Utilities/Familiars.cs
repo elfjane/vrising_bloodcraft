@@ -60,6 +60,10 @@ internal static class Familiars
 
     static readonly PrefabGUID _itemSchematic = PrefabGUIDs.Item_Ingredient_Research_Schematic;
 
+    // Cached auto-remove reward (initialized once to avoid repeated allocations)
+    public static PrefabGUID AutoRemoveRewardItem { get; } = new(ConfigService.AutoRemoveItem);
+    public static int AutoRemoveRewardQty { get; } = ConfigService.AutoRemoveItemQuantity;
+
     static readonly float3 _southFloat3 = new(0f, 0f, -1f);
 
     const float BLOOD_QUALITY_IGNORE = 90f;
@@ -104,6 +108,19 @@ internal static class Familiars
     {
         var settings = DataService.PlayerSettingsManager.LoadPlayerSettings(steamId);
         settings[PLAYER_MAX_ACTIVE_FAMILIARS_KEY] = value;
+        DataService.PlayerSettingsManager.SavePlayerSettings(steamId, settings);
+    }
+    public const string PLAYER_AUTO_SELL_FAMILIARS_KEY = "AutoSellFamiliars";
+    public static int GetAutoSellFamiliars(ulong steamId)
+    {
+        var defaults = new Dictionary<string, int>() { [PLAYER_AUTO_SELL_FAMILIARS_KEY] = 0 };
+        var settings = DataService.PlayerSettingsManager.GetOrInitializePlayerSettings(steamId, defaults);
+        return settings.TryGetValue(PLAYER_AUTO_SELL_FAMILIARS_KEY, out var val) ? val : 0;
+    }
+    public static void SetAutoSellFamiliars(ulong steamId, int value)
+    {
+        var settings = DataService.PlayerSettingsManager.LoadPlayerSettings(steamId);
+        settings[PLAYER_AUTO_SELL_FAMILIARS_KEY] = value;
         DataService.PlayerSettingsManager.SavePlayerSettings(steamId, settings);
     }
 
@@ -631,6 +648,24 @@ internal static class Familiars
     {
         TogglePlayerBool(steamId, VBLOOD_EMOTES_KEY);
         LocalizationService.HandleReply(ctx, GetPlayerBool(steamId, VBLOOD_EMOTES_KEY) ? "VBlood emotes <color=green>enabled</color>." : "VBlood emotes <color=red>disabled</color>.");
+    }
+
+    public static void ToggleAutoRemove(ChatCommandContext ctx, ulong steamId)
+    {
+        TogglePlayerBool(steamId, AUTOREMOVE_KEY);
+        bool current = GetPlayerBool(steamId, AUTOREMOVE_KEY);
+
+        if (current)
+        {
+            // When AutoRemove is enabled, ensure AutoSellFamiliars is set to 1
+            SetAutoSellFamiliars(steamId, 1);
+            LocalizationService.HandleReply(ctx, "自動賣出寵物已 <color=green>啟用</color>。");
+        }
+        else
+        {
+            SetAutoSellFamiliars(steamId, 0);
+            LocalizationService.HandleReply(ctx, "自動賣出寵物已 <color=red>停用</color>。");
+        }
     }
     public static void CallFamiliar(Entity playerCharacter, Entity familiar, User user, ulong steamId)
     {
